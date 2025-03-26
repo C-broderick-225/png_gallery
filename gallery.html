@@ -31,7 +31,7 @@
             -webkit-backdrop-filter: blur(10px);
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4),
                         0 0 0 1px rgba(255, 255, 255, 0.1);
-            z-index: 1000;
+            z-index: 999;
         }
         
         .content-wrapper {
@@ -328,7 +328,7 @@
             flex: 1;
             width: 100%;
             border: none;
-            background: #1a1a1a;
+            background: transparent;
         }
         
         .modal-nav {
@@ -839,12 +839,16 @@
         /* Add these styles in the <style> section */
         .toast-container {
             position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 9999;
+            top: 60px; /* Match the header height */
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1001;
             display: flex;
             flex-direction: column;
             gap: 10px;
+            width: auto;
+            max-width: 90%;
+            pointer-events: none; /* Allow clicking through the container */
         }
 
         .toast {
@@ -858,14 +862,17 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            transform: translateX(120%);
-            transition: transform 0.3s ease;
-            max-width: 300px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            transform: translateY(-100%); /* Start above the viewport */
+            opacity: 0;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+            margin: 0 auto; /* Center horizontally */
+            min-width: 300px; /* Ensure minimum width */
+            pointer-events: auto; /* Re-enable pointer events for individual toasts */
         }
 
         .toast.show {
-            transform: translateX(0);
+            transform: translateY(0); /* Drop down to normal position */
+            opacity: 1;
         }
 
         .toast.error {
@@ -984,6 +991,84 @@
             scrollbar-width: thin;
             scrollbar-color: rgba(97, 97, 97, 0.8) rgba(45, 45, 45, 0.6);
         }
+
+        /* Sliding Container Styles */
+        .sliding-container {
+            position: fixed;
+            top: 0;
+            right: -100%;
+            width: 80%;
+            height: 100vh;
+            background: rgba(26, 26, 26, 0.3);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            transition: right 0.3s ease;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            box-shadow: -4px 0 20px rgba(0, 0, 0, 0.3);
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .sliding-container.active {
+            right: 0;
+        }
+        
+        .sliding-container-header {
+            padding: 15px 20px;
+            background: rgba(45, 45, 45, 0.6);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .sliding-container-content {
+            flex: 1;
+            overflow: hidden;
+            background: transparent;
+        }
+        
+        .sliding-container-header h3 {
+            margin: 0;
+            color: #e0e0e0;
+        }
+        
+        .sliding-container-close {
+            background: none;
+            border: none;
+            color: #e0e0e0;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0 5px;
+        }
+        
+        .sliding-container-close:hover {
+            color: #fff;
+        }
+
+        .thumbnail-placeholder {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(145deg, #2d2d2d, #252525);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #909090;
+            font-size: 12px;
+        }
+        
+        .thumbnails-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 15px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
     </style>
 </head>
 <body>
@@ -995,7 +1080,17 @@
 
     <div class="hamburger-menu">
         <div class="menu-section">
-            <h3>Search & Keywords</h3>
+            <h3>Gallery</h3>
+            <div class="menu-buttons">
+                <button id="openDirectoryBtn"><i class="fas fa-folder-open"></i>Select Folder</button>
+                <button id="addFilesBtn"><i class="fas fa-plus"></i>Add Files</button>
+                <button id="clearGalleryBtn"><i class="fas fa-trash"></i>Clear Gallery</button>
+                <button id="reloadGalleryBtn"><i class="fas fa-sync"></i>Reload</button>
+            </div>
+        </div>
+
+        <div class="menu-section">
+            <h3>Search & Filter</h3>
             <div class="search-container">
                 <input type="text" id="searchInput" placeholder="Search images by name, tags, or metadata...">
                 <div class="search-highlight"></div>
@@ -1013,6 +1108,16 @@
         </div>
 
         <div class="menu-section">
+            <h3>Sort & Organize</h3>
+            <div class="menu-buttons">
+                <button id="organizeByColorBtn"><i class="fas fa-palette"></i>By Color</button>
+                <button id="sortByNameBtn"><i class="fas fa-sort-alpha-down"></i>By Name</button>
+                <button id="sortByDateBtn"><i class="fas fa-calendar"></i>By Date</button>
+                <button id="sortBySizeBtn"><i class="fas fa-weight-hanging"></i>By Size</button>
+            </div>
+        </div>
+
+        <div class="menu-section">
             <h3>Display</h3>
             <div class="size-control">
                 <label for="thumbnailSize">Thumbnail Size</label>
@@ -1022,30 +1127,9 @@
         </div>
 
         <div class="menu-section">
-            <h3>Editor</h3>
+            <h3>Edit</h3>
             <div class="menu-buttons">
                 <button id="openMetadataEditorBtn"><i class="fas fa-edit"></i>PNG Editor</button>
-            </div>
-        </div>
-
-        <div class="menu-section">
-            <h3>Gallery</h3>
-            <div class="menu-buttons">
-                <button id="openDirectoryBtn"><i class="fas fa-folder-open"></i>Select Folder</button>
-                <button id="addFilesBtn"><i class="fas fa-plus"></i>Add Files</button>
-                <button id="clearGalleryBtn"><i class="fas fa-trash"></i>Clear Gallery</button>
-                <button id="reloadGalleryBtn"><i class="fas fa-sync"></i>Reload</button>
-            </div>
-        </div>
-
-        <div class="menu-section">
-            <h3>Sort</h3>
-            <div class="menu-buttons">
-                <button id="organizeByColorBtn"><i class="fas fa-palette"></i>By Color</button>
-                <button id="sortByNameBtn"><i class="fas fa-sort-alpha-down"></i>By Name</button>
-                <button id="sortByDateBtn"><i class="fas fa-calendar"></i>By Date</button>
-                <button id="sortBySizeBtn"><i class="fas fa-weight-hanging"></i>By Size</button>
-                <button id="restoreOrderBtn"><i class="fas fa-undo"></i>Restore Order</button>
             </div>
         </div>
     </div>
@@ -1077,6 +1161,17 @@
         
         <div class="gallery" id="gallery">
             <!-- Thumbnails will be generated by JavaScript -->
+        </div>
+        
+        <!-- PNG Metadata Editor Sliding Container -->
+        <div id="metadataEditorContainer" class="sliding-container">
+            <div class="sliding-container-header">
+                <h3>PNG Metadata Editor</h3>
+                <button class="sliding-container-close">&times;</button>
+            </div>
+            <div class="sliding-container-content">
+                <iframe id="pngEditorFrame" style="width: 100%; height: 100%; border: none;"></iframe>
+            </div>
         </div>
         
         <div id="imageModal" class="modal">
@@ -1114,17 +1209,6 @@
                 </div>
             </div>
         </div>
-
-        <!-- PNG Editor Modal -->
-        <div id="pngEditorModal" class="modal">
-            <div class="modal-content" style="width: 90%; max-width: 1200px; height: 90vh; overflow: hidden;">
-                <div class="modal-header">
-                    <h3>PNG Metadata Editor</h3>
-                    <button class="modal-close">&times;</button>
-                </div>
-                <iframe id="pngEditorFrame" style="width: 100%; height: calc(100% - 50px); border: none;"></iframe>
-            </div>
-        </div>
     </div>
     
     <script>
@@ -1141,6 +1225,8 @@
         const addFilesBtn = document.getElementById('addFilesBtn');
         const clearGalleryBtn = document.getElementById('clearGalleryBtn');
         const openMetadataEditorBtn = document.getElementById('openMetadataEditorBtn');
+        const metadataEditorContainer = document.getElementById('metadataEditorContainer');
+        const pngEditorFrame = document.getElementById('pngEditorFrame');
 
         // Check if button exists
         if (!openMetadataEditorBtn) {
@@ -1333,6 +1419,10 @@
         clearGalleryBtn.addEventListener('click', () => {
             imageEntries = [];
             directoryHandle = null;
+            imageCache.clear();
+            metadataCache.clear();
+            currentPage = 1;
+            hasMore = true;
             localStorage.removeItem('imageEntries');
             localStorage.removeItem('directoryHandle');
             refreshGallery();
@@ -1340,46 +1430,51 @@
             showStatus("Gallery cleared", "info");
         });
         
-        // Open PNG Metadata Editor
+        // Update the openMetadataEditorBtn click handler
         openMetadataEditorBtn.addEventListener('click', () => {
             console.log('PNG Editor button clicked');
-            const modal = document.getElementById('pngEditorModal');
-            const frame = document.getElementById('pngEditorFrame');
             
-            console.log('Modal element:', modal);
-            console.log('Frame element:', frame);
+            if (!metadataEditorContainer || !pngEditorFrame) {
+                console.error('Metadata editor container or frame elements not found');
+                return;
+            }
             
-            if (!modal || !frame) {
-                console.error('Modal or frame elements not found');
+            // If the button is already active, close the editor
+            if (openMetadataEditorBtn.classList.contains('active')) {
+                console.log('Closing editor - button was active');
+                metadataEditorContainer.classList.remove('active');
+                openMetadataEditorBtn.classList.remove('active');
                 return;
             }
             
             // Load the editor in the iframe
-            frame.src = 'png-editor.html';
+            pngEditorFrame.src = 'png-editor.html';
             
-            // Show the modal
-            modal.style.display = 'block';
-            console.log('Modal display set to block');
+            // Show the sliding container
+            metadataEditorContainer.classList.add('active');
+            // Add active class to the button
+            openMetadataEditorBtn.classList.add('active');
+            console.log('Sliding container activated');
             
             // Add close button handler
-            const closeBtn = modal.querySelector('.modal-close');
+            const closeBtn = metadataEditorContainer.querySelector('.sliding-container-close');
             if (closeBtn) {
                 closeBtn.onclick = () => {
                     console.log('Close button clicked');
-                    modal.style.display = 'none';
+                    metadataEditorContainer.classList.remove('active');
+                    // Remove active class from the button
+                    openMetadataEditorBtn.classList.remove('active');
                 };
             }
-            
-            // Close when clicking outside
-            modal.onclick = (e) => {
-                if (e.target === modal) {
-                    console.log('Modal background clicked');
-                    modal.style.display = 'none';
-                }
-            };
         });
         
-        // Refresh the gallery display
+        // Add virtualization for gallery
+        const ITEMS_PER_PAGE = 20;
+        let currentPage = 1;
+        let isLoading = false;
+        let hasMore = true;
+
+        // Optimized refreshGallery function with virtualization
         function refreshGallery(searchTerms = []) {
             if (imageEntries.length === 0) {
                 gallery.innerHTML = '<p>No images found.</p>';
@@ -1389,55 +1484,16 @@
             // Clear existing thumbnails
             gallery.innerHTML = '';
 
-            // Create new thumbnails
-            imageEntries.forEach((entry, index) => {
-                const thumbnail = document.createElement('div');
-                thumbnail.className = 'thumbnail visible';
-                thumbnail.onclick = () => showFullImage(index);
-                
-                const img = document.createElement('img');
-                img.className = 'thumbnail-img';
-                
-                if (entry.base64Data) {
-                    img.src = entry.base64Data;
-                } else if (entry.objectUrl) {
-                    img.src = entry.objectUrl;
-                } else {
-                    img.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
-                }
-                
-                img.alt = entry.metadata.Name || 'Image';
-                
-                // Add select button instead of checkbox
-                const selectBtn = document.createElement('button');
-                selectBtn.className = 'select-btn';
-                selectBtn.textContent = 'Select';
-                selectBtn.onclick = (e) => {
-                    e.stopPropagation(); // Prevent thumbnail click when clicking button
-                    selectBtn.classList.toggle('selected');
-                    thumbnail.classList.toggle('selected');
-                    selectBtn.textContent = selectBtn.classList.contains('selected') ? 'Selected' : 'Select';
-                    updateSelectedCount();
-                };
-                thumbnail.appendChild(selectBtn);
-                
-                thumbnail.appendChild(img);
-                gallery.appendChild(thumbnail);
-            });
+            // Create container for thumbnails
+            const thumbnailsContainer = document.createElement('div');
+            thumbnailsContainer.className = 'thumbnails-container';
+            gallery.appendChild(thumbnailsContainer);
 
-            // Filter and update visibility
-            let matchCount = 0;
-            const thumbnails = gallery.getElementsByClassName('thumbnail');
-            
-            Array.from(thumbnails).forEach((thumbnail, index) => {
-                const entry = imageEntries[index];
-                let isMatch = true;
-
-                if (searchTerms.length > 0) {
+            // Filter entries based on search terms
+            const filteredEntries = searchTerms.length > 0 ? 
+                imageEntries.filter(entry => {
                     const metadata = entry.metadata;
-                    
-                    // Check if any search term matches
-                    isMatch = searchTerms.some(term => {
+                    return searchTerms.some(term => {
                         const termLower = term.toLowerCase();
                         
                         // Search in basic metadata
@@ -1459,26 +1515,157 @@
                             return value.toLowerCase().includes(termLower);
                         });
                     });
-                }
+                }) : imageEntries;
 
-                // Update thumbnail visibility
-                if (isMatch) {
-                    thumbnail.classList.remove('hidden');
-                    thumbnail.classList.add('visible');
-                    thumbnail.classList.add('search-match');
-                    setTimeout(() => thumbnail.classList.remove('search-match'), 1000);
-                    matchCount++;
-                } else {
-                    thumbnail.classList.remove('visible');
-                    thumbnail.classList.add('hidden');
-                    thumbnail.classList.remove('search-match');
-                }
-            });
+            // Load initial page
+            loadThumbnailsPage(filteredEntries, 1);
 
-            return matchCount;
+            // Add scroll event listener for infinite scroll
+            const scrollHandler = debounce(() => {
+                if (isLoading || !hasMore) return;
+                
+                const scrollPosition = window.innerHeight + window.scrollY;
+                const bodyHeight = document.body.offsetHeight;
+                
+                if (scrollPosition >= bodyHeight - 1000) {
+                    currentPage++;
+                    loadThumbnailsPage(filteredEntries, currentPage);
+                }
+            }, 100);
+
+            window.addEventListener('scroll', scrollHandler);
+
+            // Cleanup function
+            return () => {
+                window.removeEventListener('scroll', scrollHandler);
+            };
         }
-        
-        // Show full image
+
+        // Function to load a page of thumbnails
+        async function loadThumbnailsPage(entries, page) {
+            if (isLoading) return;
+            isLoading = true;
+
+            const startIndex = (page - 1) * ITEMS_PER_PAGE;
+            const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, entries.length);
+            const pageEntries = entries.slice(startIndex, endIndex);
+
+            const thumbnailsContainer = gallery.querySelector('.thumbnails-container');
+            const fragment = document.createDocumentFragment();
+
+            for (const entry of pageEntries) {
+                const thumbnail = await createThumbnail(entry);
+                fragment.appendChild(thumbnail);
+            }
+
+            thumbnailsContainer.appendChild(fragment);
+            isLoading = false;
+            hasMore = endIndex < entries.length;
+        }
+
+        // Optimized thumbnail creation with lazy loading
+        async function createThumbnail(entry) {
+            const thumbnail = document.createElement('div');
+            thumbnail.className = 'thumbnail visible';
+            thumbnail.onclick = () => showFullImage(imageEntries.indexOf(entry));
+            
+            const img = document.createElement('img');
+            img.className = 'thumbnail-img';
+            img.loading = 'lazy'; // Enable native lazy loading
+            
+            // Create a placeholder
+            const placeholder = document.createElement('div');
+            placeholder.className = 'thumbnail-placeholder';
+            thumbnail.appendChild(placeholder);
+            
+            // Load image in background
+            setTimeout(async () => {
+                try {
+                    if (entry.base64Data) {
+                        img.src = entry.base64Data;
+                    } else if (entry.objectUrl) {
+                        img.src = entry.objectUrl;
+                    } else {
+                        img.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+                    }
+                    
+                    img.alt = entry.metadata.Name || 'Image';
+                    
+                    // Add select button
+                    const selectBtn = document.createElement('button');
+                    selectBtn.className = 'select-btn';
+                    selectBtn.textContent = 'Select';
+                    selectBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        selectBtn.classList.toggle('selected');
+                        thumbnail.classList.toggle('selected');
+                        selectBtn.textContent = selectBtn.classList.contains('selected') ? 'Selected' : 'Select';
+                        updateSelectedCount();
+                    };
+                    
+                    // Replace placeholder with actual image
+                    thumbnail.replaceChild(img, placeholder);
+                    thumbnail.appendChild(selectBtn);
+                } catch (error) {
+                    console.error('Error loading thumbnail:', error);
+                    placeholder.textContent = 'Error loading image';
+                }
+            }, 0);
+            
+            return thumbnail;
+        }
+
+        // Debounce function for scroll handler
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // Add image cache for better performance
+        const imageCache = new Map();
+
+        // Optimized image loading function
+        async function loadImageOptimized(entry) {
+            if (imageCache.has(entry.handle.name)) {
+                return imageCache.get(entry.handle.name);
+            }
+
+            const img = new Image();
+            let objectUrl = null;
+
+            try {
+                if (entry.base64Data) {
+                    img.src = entry.base64Data;
+                } else if (entry.objectUrl) {
+                    img.src = entry.objectUrl;
+                } else {
+                    throw new Error('No valid image source found');
+                }
+
+                await new Promise((resolve, reject) => {
+                    img.onload = resolve;
+                    img.onerror = reject;
+                });
+
+                // Cache the loaded image
+                imageCache.set(entry.handle.name, img);
+                return img;
+            } catch (error) {
+                if (objectUrl) {
+                    URL.revokeObjectURL(objectUrl);
+                }
+                throw error;
+            }
+        }
+
+        // Optimized showFullImage function
         async function showFullImage(index) {
             try {
                 const entry = imageEntries[index];
@@ -1502,17 +1689,13 @@
                 prevBtn.classList.add('show');
                 nextBtn.classList.add('show');
                 
-                // Set the image source based on available data
-                if (entry.base64Data) {
-                    modalImg.src = entry.base64Data;
-                } else if (entry.objectUrl) {
-                    modalImg.src = entry.objectUrl;
-                }
-
+                // Load and display the image
+                const img = await loadImageOptimized(entry);
+                modalImg.src = img.src;
+                
                 // Extract colors and set ambient background
-                const colors = await extractImageColors(modalImg);
+                const colors = await extractImageColors(img);
                 if (colors.length >= 2) {
-                    // Create a more dynamic gradient with color variations
                     const gradient = `linear-gradient(45deg, 
                         ${colors[0]} 0%, 
                         ${colors[1]} 25%, 
@@ -1527,16 +1710,13 @@
                     editorBtn.classList.add('show');
                     editorBtn.onclick = (e) => {
                         e.stopPropagation();
-                        
-                        // Use base64Data if available, otherwise use objectUrl
-                        const imageSource = entry.base64Data || entry.objectUrl;
-                        editImage(this);
+                        editImage(entry);
                     };
                 } else {
                     editorBtn.classList.remove('show');
                 }
                 
-                // Navigation function
+                // Optimized navigation function
                 const navigate = async (direction) => {
                     let newIndex = index + direction;
                     if (newIndex >= imageEntries.length) newIndex = 0;
@@ -1545,51 +1725,45 @@
                     // Update image source with fade effect
                     modalImg.style.opacity = 0;
                     
-                    // Extract colors for the new image
-                    const newEntry = imageEntries[newIndex];
-                    const newImage = new Image();
-                    if (newEntry.base64Data) {
-                        newImage.src = newEntry.base64Data;
-                    } else if (newEntry.objectUrl) {
-                        newImage.src = newEntry.objectUrl;
-                    }
-                    
-                    // Wait for the new image to load
-                    await new Promise((resolve) => {
-                        newImage.onload = resolve;
-                    });
-                    
-                    // Extract colors and update background
-                    const colors = await extractImageColors(newImage);
-                    if (colors.length >= 2) {
-                        const gradient = `linear-gradient(45deg, 
-                            ${colors[0]} 0%, 
-                            ${colors[1]} 25%, 
-                            ${colors[2] || colors[0]} 50%, 
-                            ${colors[1]} 75%, 
-                            ${colors[0]} 100%)`;
-                        modal.style.backgroundImage = gradient;
-                    }
-                    
-                    // Update image and restore opacity
-                    modalImg.src = newImage.src;
-                    modalImg.style.opacity = 1;
-                    index = newIndex;
-                    
-                    // Update PNG editor button visibility
-                    if (newEntry.metadata.Type && newEntry.metadata.Type.includes('png')) {
-                        editorBtn.classList.add('show');
-                        editorBtn.onclick = (e) => {
-                            e.stopPropagation();
-                            const imageSource = newEntry.base64Data || newEntry.objectUrl;
-                            editImage(this);
-                        };
-                    } else {
-                        editorBtn.classList.remove('show');
+                    try {
+                        const newEntry = imageEntries[newIndex];
+                        const newImg = await loadImageOptimized(newEntry);
+                        
+                        // Extract colors and update background
+                        const colors = await extractImageColors(newImg);
+                        if (colors.length >= 2) {
+                            const gradient = `linear-gradient(45deg, 
+                                ${colors[0]} 0%, 
+                                ${colors[1]} 25%, 
+                                ${colors[2] || colors[0]} 50%, 
+                                ${colors[1]} 75%, 
+                                ${colors[0]} 100%)`;
+                            modal.style.backgroundImage = gradient;
+                        }
+                        
+                        // Update image and restore opacity
+                        modalImg.src = newImg.src;
+                        modalImg.style.opacity = 1;
+                        index = newIndex;
+                        
+                        // Update PNG editor button visibility
+                        if (newEntry.metadata.Type && newEntry.metadata.Type.includes('png')) {
+                            editorBtn.classList.add('show');
+                            editorBtn.onclick = (e) => {
+                                e.stopPropagation();
+                                editImage(newEntry);
+                            };
+                        } else {
+                            editorBtn.classList.remove('show');
+                        }
+                    } catch (error) {
+                        console.error('Error loading image:', error);
+                        showStatus('Error loading image', 'error');
+                        modalImg.style.opacity = 1;
                     }
                 };
                 
-                // Close modal function
+                // Optimized close modal function
                 const closeModal = () => {
                     modal.classList.remove('show');
                     modalImg.classList.remove('show');
@@ -1597,6 +1771,9 @@
                     prevBtn.classList.remove('show');
                     nextBtn.classList.remove('show');
                     editorBtn.classList.remove('show');
+                    
+                    // Clear image cache when closing modal
+                    imageCache.clear();
                     
                     // Wait for transition to complete before hiding the modal
                     setTimeout(() => {
@@ -1607,39 +1784,55 @@
                     document.removeEventListener('keydown', keyHandler);
                 };
                 
-                // Keyboard handler
+                // Keyboard handler with debounce
+                let keyHandlerTimeout;
                 const keyHandler = (e) => {
-                    if (e.key === 'Escape') closeModal();
-                    if (e.key === 'ArrowLeft') navigate(-1);
-                    if (e.key === 'ArrowRight') navigate(1);
+                    if (keyHandlerTimeout) {
+                        clearTimeout(keyHandlerTimeout);
+                    }
+                    
+                    keyHandlerTimeout = setTimeout(() => {
+                        if (e.key === 'Escape') closeModal();
+                        if (e.key === 'ArrowLeft') navigate(-1);
+                        if (e.key === 'ArrowRight') navigate(1);
+                    }, 50); // Debounce time
                 };
                 
                 // Add keyboard listener
                 document.addEventListener('keydown', keyHandler);
                 
-                // Click handlers
+                // Optimized click handlers with event delegation
                 modal.onclick = function(e) {
-                    if (e.target === modal || e.target === modalImg || e.target.className.includes('modal-close')) {
+                    const target = e.target;
+                    if (target === modal || target === modalImg || target.className.includes('modal-close')) {
                         closeModal();
-                    } else if (e.target === prevBtn) {
+                    } else if (target === prevBtn) {
                         navigate(-1);
-                    } else if (e.target === nextBtn) {
+                    } else if (target === nextBtn) {
                         navigate(1);
                     }
                 };
                 
-                // Add click handlers for navigation buttons
+                // Add click handlers for navigation buttons with debounce
+                let navTimeout;
+                const debouncedNavigate = (direction) => {
+                    if (navTimeout) {
+                        clearTimeout(navTimeout);
+                    }
+                    navTimeout = setTimeout(() => navigate(direction), 50);
+                };
+                
                 prevBtn.onclick = (e) => {
                     e.stopPropagation();
-                    navigate(-1);
+                    debouncedNavigate(-1);
                 };
                 
                 nextBtn.onclick = (e) => {
                     e.stopPropagation();
-                    navigate(1);
+                    debouncedNavigate(1);
                 };
                 
-                // Optionally check if original file still exists (just for user feedback)
+                // Check if original file still exists (just for user feedback)
                 if (directoryHandle) {
                     try {
                         await directoryHandle.getFileHandle(entry.handle.name);
@@ -1653,24 +1846,41 @@
                 console.error(error);
             }
         }
-        
-        // Delete an image
+
+        // Add cleanup function for image cache
+        function cleanupImageCache() {
+            imageCache.clear();
+        }
+
+        // Update the deleteImage function to clean up cache
         async function deleteImage(index) {
-            // Revoke the object URL to free memory
-            URL.revokeObjectURL(imageEntries[index].objectUrl);
-            
-            // Remove from array
+            const entry = imageEntries[index];
+            if (entry.objectUrl) {
+                URL.revokeObjectURL(entry.objectUrl);
+            }
+            imageCache.delete(entry.handle.name);
+            removeImage(index);
+        }
+
+        // Function to remove a single image
+        function removeImage(index) {
+            // Remove from both arrays
             imageEntries.splice(index, 1);
+            originalImageOrder.splice(index, 1);
             
             // Save and refresh
             saveImageEntries();
             refreshGallery();
-            showStatus("Image removed", "info");
+            
+            // Show success message
+            showStatus("Image removed", "success");
         }
         
         // Save image entries to localStorage
         function saveImageEntries() {
-            localStorage.setItem('imageEntries', JSON.stringify(imageEntries));
+            return saveImageEntriesSafely().catch(error => {
+                console.error('Failed to save image entries:', error);
+            });
         }
         
         // Helper function to format file size
@@ -1920,7 +2130,6 @@
             document.getElementById('sortByNameBtn').addEventListener('click', sortByName);
             document.getElementById('sortByDateBtn').addEventListener('click', sortByDate);
             document.getElementById('sortBySizeBtn').addEventListener('click', sortBySize);
-            document.getElementById('restoreOrderBtn').addEventListener('click', restoreOrder);
         });
         
         // Add these new functions to handle metadata
@@ -2385,11 +2594,18 @@
             
             if (selectedCount === 0) return;
             
-            // Remove the images from the imageEntries array
-            selectedButtons.forEach(button => {
-                const thumbnail = button.closest('.thumbnail');
-                const index = Array.from(thumbnail.parentElement.children).indexOf(thumbnail);
+            // Get indices of selected images in reverse order to avoid index shifting issues
+            const selectedIndices = Array.from(selectedButtons)
+                .map(button => {
+                    const thumbnail = button.closest('.thumbnail');
+                    return Array.from(thumbnail.parentElement.children).indexOf(thumbnail);
+                })
+                .sort((a, b) => b - a); // Sort in descending order
+            
+            // Remove images from both arrays
+            selectedIndices.forEach(index => {
                 imageEntries.splice(index, 1);
+                originalImageOrder.splice(index, 1);
             });
             
             // Save and refresh
@@ -2637,13 +2853,6 @@
             showStatus("Gallery sorted by size (largest first)", "success");
         }
 
-        function restoreOrder() {
-            deactivateAllSorts();
-            imageEntries = [...originalImageOrder];
-            refreshGallery();
-            showStatus("Gallery order restored", "success");
-        }
-
         // Add click handlers for keyword buttons
         function addKeywordButtonHandlers() {
             const keywordButtons = document.querySelectorAll('.keyword-button');
@@ -2888,6 +3097,229 @@
                 console.error(error);
             }
         });
+
+        // Add message event listener for communication with PNG editor
+        window.addEventListener('message', function(event) {
+            if (event.data.type === 'closeEditor') {
+                // Close the editor modal
+                const modal = document.getElementById('pngEditorModal');
+                if (modal) {
+                    modal.style.display = 'none';
+                }
+            } else if (event.data.type === 'imageAdded') {
+                // Add the new image to the gallery immediately
+                const newEntry = event.data.imageEntry;
+                imageEntries.push(newEntry);
+                originalImageOrder.push(newEntry);
+                
+                // Save to localStorage
+                saveImageEntries();
+                
+                // Refresh the gallery display
+                refreshGallery();
+                updateTagsList();
+                
+                // Show success message
+                showStatus('New image added to gallery', 'success');
+            }
+        });
+
+        // Update the editImage function to handle the editor modal
+        function editImage(entry) {
+            // Get the image source (base64 or object URL)
+            const imageSource = entry.base64Data || entry.objectUrl;
+            const filename = entry.handle.name || 'image.png';
+            
+            // Show the editor modal
+            const modal = document.getElementById('pngEditorModal');
+            const frame = document.getElementById('pngEditorFrame');
+            
+            // Show the modal
+            modal.style.display = 'block';
+            
+            // Wait for the iframe to load
+            frame.onload = () => {
+                // Send the image data to the editor
+                frame.contentWindow.postMessage({
+                    type: 'loadImage',
+                    imageUrl: imageSource,
+                    filename: filename
+                }, '*');
+            };
+            
+            // Load the editor if not already loaded
+            if (frame.src !== 'png-editor.html') {
+                frame.src = 'png-editor.html';
+            }
+        }
+
+        // Add metadata cache and compression
+        const metadataCache = new Map();
+        const COMPRESSION_THRESHOLD = 1024 * 1024; // 1MB
+
+        // Optimized metadata handling
+        async function handleMetadata(file, entry) {
+            try {
+                // Check cache first
+                if (metadataCache.has(entry.handle.name)) {
+                    return metadataCache.get(entry.handle.name);
+                }
+
+                const metadata = {
+                    Name: file.name,
+                    Size: file.size,
+                    Type: file.type,
+                    LastModified: file.lastModified,
+                    Dimensions: null,
+                    FileSize: formatFileSize(file.size),
+                    LastModifiedDate: new Date(file.lastModified).toLocaleString()
+                };
+
+                // Only process image metadata if it's an image
+                if (file.type.startsWith('image/')) {
+                    const img = new Image();
+                    await new Promise((resolve, reject) => {
+                        img.onload = resolve;
+                        img.onerror = reject;
+                        img.src = URL.createObjectURL(file);
+                    });
+
+                    metadata.Dimensions = `${img.width}x${img.height}`;
+                    URL.revokeObjectURL(img.src);
+                }
+
+                // Cache the metadata
+                metadataCache.set(entry.handle.name, metadata);
+                return metadata;
+            } catch (error) {
+                console.error('Error handling metadata:', error);
+                return {
+                    Name: file.name,
+                    Size: file.size,
+                    Type: file.type,
+                    LastModified: file.lastModified,
+                    FileSize: formatFileSize(file.size),
+                    LastModifiedDate: new Date(file.lastModified).toLocaleString()
+                };
+            }
+        }
+
+        // Optimized saveImageEntries function with compression
+        async function saveImageEntries() {
+            try {
+                const entriesToSave = await Promise.all(imageEntries.map(async (entry) => {
+                    const saveEntry = { ...entry };
+                    
+                    // Only compress if the base64 data is larger than the threshold
+                    if (saveEntry.base64Data && saveEntry.base64Data.length > COMPRESSION_THRESHOLD) {
+                        // Convert base64 to blob
+                        const byteString = atob(saveEntry.base64Data.split(',')[1]);
+                        const ab = new ArrayBuffer(byteString.length);
+                        const ia = new Uint8Array(ab);
+                        for (let i = 0; i < byteString.length; i++) {
+                            ia[i] = byteString.charCodeAt(i);
+                        }
+                        
+                        // Create blob and compress
+                        const blob = new Blob([ab], { type: entry.metadata.Type });
+                        const compressedBlob = await compressImage(blob);
+                        
+                        // Convert back to base64
+                        const reader = new FileReader();
+                        saveEntry.base64Data = await new Promise((resolve) => {
+                            reader.onload = () => resolve(reader.result);
+                            reader.readAsDataURL(compressedBlob);
+                        });
+                    }
+                    
+                    return saveEntry;
+                }));
+
+                localStorage.setItem('imageEntries', JSON.stringify(entriesToSave));
+                return true;
+            } catch (error) {
+                console.error('Error saving image entries:', error);
+                showStatus('Error saving gallery data', 'error');
+                return false;
+            }
+        }
+
+        // Image compression function
+        async function compressImage(blob) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Calculate new dimensions while maintaining aspect ratio
+                    let width = img.width;
+                    let height = img.height;
+                    const maxDimension = 1920; // Max dimension for compressed images
+                    
+                    if (width > height && width > maxDimension) {
+                        height = Math.round((height * maxDimension) / width);
+                        width = maxDimension;
+                    } else if (height > maxDimension) {
+                        width = Math.round((width * maxDimension) / height);
+                        height = maxDimension;
+                    }
+                    
+                    canvas.width = width;
+                    canvas.height = height;
+                    
+                    // Draw and compress
+                    ctx.drawImage(img, 0, 0, width, height);
+                    canvas.toBlob(resolve, 'image/jpeg', 0.8); // 80% quality
+                };
+                img.onerror = reject;
+                img.src = URL.createObjectURL(blob);
+            });
+        }
+
+        // Optimized loadImageEntries function
+        async function loadImageEntries() {
+            try {
+                const savedEntries = localStorage.getItem('imageEntries');
+                if (!savedEntries) return;
+
+                const entries = JSON.parse(savedEntries);
+                
+                // Process entries in batches to avoid blocking the UI
+                const batchSize = 10;
+                for (let i = 0; i < entries.length; i += batchSize) {
+                    const batch = entries.slice(i, i + batchSize);
+                    await Promise.all(batch.map(async (entry) => {
+                        // Restore metadata from cache if available
+                        if (metadataCache.has(entry.handle.name)) {
+                            entry.metadata = metadataCache.get(entry.handle.name);
+                        }
+                        
+                        // Create object URL if needed
+                        if (entry.base64Data && !entry.objectUrl) {
+                            entry.objectUrl = URL.createObjectURL(await base64ToBlob(entry.base64Data));
+                        }
+                    }));
+                    
+                    // Update UI periodically
+                    if (i % (batchSize * 2) === 0) {
+                        refreshGallery();
+                    }
+                }
+                
+                imageEntries = entries;
+                refreshGallery();
+            } catch (error) {
+                console.error('Error loading image entries:', error);
+                showStatus('Error loading gallery data', 'error');
+            }
+        }
+
+        // Helper function to convert base64 to blob
+        async function base64ToBlob(base64) {
+            const response = await fetch(base64);
+            return response.blob();
+        }
     </script>
 </body>
 </html>

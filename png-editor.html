@@ -15,7 +15,7 @@
         
         body {
             font-family: Arial, sans-serif;
-            background-color: #1a1a1a;
+            background-color: transparent;
             padding: 0;
             color: #e0e0e0;
             margin: 0;
@@ -37,7 +37,8 @@
             z-index: 1000;
             display: flex;
             align-items: center;
-            justify-content: center;
+            justify-content: space-between;
+            padding: 0 20px;
         }
         
         .static-header h1 {
@@ -71,17 +72,22 @@
             display: flex;
             gap: 30px;
             margin-bottom: 30px;
-            background: #2d2d2d;
+            background: rgba(45, 45, 45, 0.6);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
             border-radius: 12px;
             padding: 20px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
             flex: 1;
             overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
         
         .image-preview {
             flex: 1;
-            background: #1a1a1a;
+            background: rgba(26, 26, 26, 0.6);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
             border-radius: 8px;
             padding: 20px;
             display: flex;
@@ -89,6 +95,7 @@
             align-items: center;
             overflow: hidden;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
         
         .image-preview img {
@@ -119,11 +126,14 @@
         
         .metadata-form {
             flex: 1;
-            background: #1a1a1a;
+            background: rgba(26, 26, 26, 0.6);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
             border-radius: 8px;
             padding: 20px;
             overflow-y: auto;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
         
         .metadata-form::-webkit-scrollbar {
@@ -158,9 +168,11 @@
         .form-group input, .form-group textarea {
             width: 100%;
             padding: 12px;
-            border: 1px solid #444;
+            border: 1px solid rgba(68, 68, 68, 0.6);
             border-radius: 6px;
-            background: #1a1a1a;
+            background: rgba(26, 26, 26, 0.6);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
             color: #e0e0e0;
             font-size: 14px;
             transition: all 0.3s ease;
@@ -667,7 +679,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.3);
             z-index: 1003;
             backdrop-filter: blur(5px);
             -webkit-backdrop-filter: blur(5px);
@@ -675,7 +687,9 @@
 
         .modal-content {
             position: relative;
-            background: #2d2d2d;
+            background: rgba(45, 45, 45, 0.8);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
             margin: 15% auto;
             padding: 20px;
             width: 80%;
@@ -725,8 +739,10 @@
         .url-input-group input {
             width: 100%;
             padding: 12px;
-            background: #1a1a1a;
-            border: 1px solid #444;
+            background: rgba(26, 26, 26, 0.6);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(68, 68, 68, 0.6);
             border-radius: 6px;
             color: #e0e0e0;
             font-size: 14px;
@@ -776,40 +792,92 @@
         .modal-actions button.load:hover {
             background: #45a049;
         }
+
+        .top-nav {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .top-nav button {
+            padding: 8px 15px;
+            background: rgba(66, 66, 66, 0.6);
+            color: #e0e0e0;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .top-nav button i {
+            font-size: 16px;
+            color: #909090;
+            transition: color 0.2s ease;
+        }
+
+        .top-nav button:hover {
+            background: rgba(97, 97, 97, 0.7);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .top-nav button:hover i {
+            color: #e0e0e0;
+        }
+
+        .top-nav button.success {
+            background: rgba(76, 175, 80, 0.6);
+        }
+
+        .top-nav button.success:hover {
+            background: rgba(76, 175, 80, 0.7);
+        }
+
+        .top-nav button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .top-nav button.loading {
+            pointer-events: none;
+            opacity: 0.8;
+        }
+
+        .top-nav button.loading::after {
+            content: '';
+            width: 16px;
+            height: 16px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+            margin-left: 8px;
+        }
     </style>
 </head>
 <body>
     <div class="static-header">
-        <h1>PNG Metadata Editor</h1>
+        <div class="top-nav">
+            <button id="openFileBtn"><i class="fas fa-folder-open"></i>Open File</button>
+            <button id="loadFromUrlBtn"><i class="fas fa-link"></i>Load from URL</button>
+            <button id="viewGalleryBtn"><i class="fas fa-images"></i>View Gallery</button>
+            <button id="saveFileBtn" class="success" disabled><i class="fas fa-save"></i>Save PNG</button>
+            <button id="addToGalleryBtn" disabled><i class="fas fa-plus"></i>Add to Gallery</button>
+            <button id="saveAndAddBtn" class="success" disabled><i class="fas fa-save"></i>Save & Add to Gallery</button>
+        </div>
     </div>
 
     <div class="content-wrapper">
-        <div class="hamburger-icon">
-            <span></span>
-            <span></span>
-            <span></span>
-        </div>
-
-        <div class="hamburger-menu">
-            <div class="menu-section">
-                <h3>File</h3>
-                <div class="menu-buttons">
-                    <button id="openFileBtn"><i class="fas fa-folder-open"></i>Open PNG File</button>
-                    <button id="loadFromUrlBtn"><i class="fas fa-link"></i>Load from URL</button>
-                    <button id="viewGalleryBtn" class="secondary"><i class="fas fa-images"></i>View Gallery</button>
-                </div>
-            </div>
-
-            <div class="menu-section">
-                <h3>Actions</h3>
-                <div class="menu-buttons">
-                    <button id="saveFileBtn" class="success" disabled><i class="fas fa-save"></i>Save PNG</button>
-                    <button id="addToGalleryBtn" class="secondary" disabled><i class="fas fa-plus"></i>Add to Gallery</button>
-                </div>
-            </div>
-        </div>
-        
-        <input type="file" id="fileInput" accept="image/png" style="display: none;">
+        <input type="file" id="fileInput" accept="image/*" style="display: none;">
         
         <div class="toast-container" id="toastContainer"></div>
         
@@ -846,6 +914,7 @@
                     <div class="form-actions">
                         <button id="saveFileBtn2" class="success" disabled><i class="fas fa-save"></i>Save PNG</button>
                         <button id="addToGalleryBtn2" class="secondary" disabled><i class="fas fa-plus"></i>Add to Gallery</button>
+                        <button id="saveAndAddBtn2" class="success" disabled><i class="fas fa-save"></i>Save & Add to Gallery</button>
                     </div>
                 </form>
             </div>
@@ -920,13 +989,6 @@
         if (!hasFileSystemAccess) {
             saveFileBtn.textContent = 'Save';
             saveFileBtn2.textContent = 'Save';
-            
-            // Show appropriate message based on why File System Access API is not being used
-            if ('showSaveFilePicker' in window) {
-                showStatus('Note: Direct file saving is disabled due to security restrictions. Files will be downloaded instead.', 'info');
-            } else {
-                showStatus('Note: Your browser doesn\'t support saving files directly. Files will be downloaded instead.', 'info');
-            }
         }
         
         // Update tooltips for Add to Gallery buttons
@@ -943,8 +1005,8 @@
             try {
                 const options = {
                     types: [{
-                        description: 'PNG Files',
-                        accept: {'image/png': ['.png']}
+                        description: 'Image Files',
+                        accept: {'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg']}
                     }],
                     multiple: false
                 };
@@ -967,7 +1029,6 @@
                     if (error.name === 'SecurityError' || error.message?.includes('Cross origin')) {
                         hasFileSystemAccess = false;
                         saveFileBtn.textContent = 'Save';
-                        showStatus('Using standard file picker due to security restrictions', 'info');
                     }
                     
                     // Fall back to standard file input
@@ -1015,6 +1076,8 @@
                     saveFileBtn2.disabled = false;
                     addToGalleryBtn.disabled = false;
                     addToGalleryBtn2.disabled = false;
+                    saveAndAddBtn.disabled = false;
+                    saveAndAddBtn2.disabled = false;
                     
                     // Create object URL for preview
                     const objectUrl = URL.createObjectURL(convertedFile);
@@ -1032,6 +1095,8 @@
                 saveFileBtn2.disabled = false;
                 addToGalleryBtn.disabled = false;
                 addToGalleryBtn2.disabled = false;
+                saveAndAddBtn.disabled = false;
+                saveAndAddBtn2.disabled = false;
                 
                 // Create object URL for preview
                 const objectUrl = URL.createObjectURL(file);
@@ -1108,114 +1173,6 @@
             });
         }
         
-        // Save file button click handlers
-        saveFileBtn.addEventListener('click', saveWithMetadata);
-        saveFileBtn2.addEventListener('click', saveWithMetadata);
-        
-        // Add to gallery button click handlers
-        addToGalleryBtn.addEventListener('click', addToGallery);
-        addToGalleryBtn2.addEventListener('click', addToGallery);
-        
-        // Function to add the current PNG to the gallery
-        async function addToGallery(event) {
-            if (!currentFile) {
-                showStatus('No file loaded', 'error');
-                return;
-            }
-            
-            try {
-                // Add loading state to the clicked button
-                const button = event.target;
-                button.classList.add('loading');
-                button.textContent = 'Adding...';
-                
-                // Show status immediately
-                showStatus('Adding to gallery...', 'info');
-                
-                // Check if it's a PNG file
-                if (!currentFile.type.includes('png')) {
-                    showStatus('Only PNG files can be added to the gallery.', 'error');
-                    button.classList.remove('loading');
-                    button.textContent = 'Add to Gallery';
-                    return;
-                }
-                
-                // Apply current metadata to the file
-                const metadata = collectMetadata();
-                const fileWithMetadata = await pngMetadata.writeMetadata(currentFile, metadata);
-                
-                // Get the filename (use current file name or a default)
-                const savedFileName = currentFile.name || 'metadata_edited.png';
-                
-                // Convert the Blob to Base64 string instead of using object URL
-                const base64Data = await blobToBase64(fileWithMetadata);
-                
-                // Load the existing gallery entries from localStorage
-                let imageEntries = [];
-                const savedEntries = localStorage.getItem('imageEntries');
-                if (savedEntries) {
-                    imageEntries = JSON.parse(savedEntries);
-                }
-                
-                // Create basic metadata for the gallery entry
-                const galleryMetadata = {
-                    "Name": savedFileName,
-                    "Size": formatFileSize(fileWithMetadata.size),
-                    "Type": fileWithMetadata.type,
-                    "Last Modified": new Date().toLocaleString()
-                };
-                
-                // Add metadata from form to gallery metadata
-                Object.entries(metadata).forEach(([key, value]) => {
-                    if (value) {
-                        galleryMetadata[key] = value;
-                    }
-                });
-                
-                // Add the new entry to the gallery with proper structure
-                imageEntries.push({
-                    handle: {
-                        name: savedFileName,
-                        size: fileWithMetadata.size,
-                        lastModified: new Date().getTime()
-                    },
-                    base64Data: base64Data,
-                    metadata: galleryMetadata,
-                    objectUrl: null  // Ensure objectUrl is null for new entries
-                });
-                
-                // Save to localStorage
-                localStorage.setItem('imageEntries', JSON.stringify(imageEntries));
-                
-                // Remove loading state
-                button.classList.remove('loading');
-                button.textContent = 'Add to Gallery';
-                
-                // Show success message with link to gallery
-                showStatus('✅ Image added to gallery! <a href="gallery.html" style="color: #81c784; text-decoration: underline;">View Gallery</a>', 'success');
-                
-            } catch (error) {
-                // Remove loading state in case of error
-                if (event && event.target) {
-                    event.target.classList.remove('loading');
-                    event.target.textContent = 'Add to Gallery';
-                }
-                
-                showStatus(`Error adding to gallery: ${error.message}`, 'error');
-                console.error(error);
-            }
-        }
-        
-        // Helper function to convert blob to base64 string
-        function blobToBase64(blob) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
-            });
-        }
-        
         // Save with metadata function
         async function saveWithMetadata(event) {
             if (!currentFile) {
@@ -1260,10 +1217,26 @@
                 
                 if (saveResult) {
                     showStatus('✅ PNG file saved successfully!', 'success');
+                    
+                    // If this was triggered by the "Save and Add to Gallery" button
+                    if (button.id === 'saveAndAddBtn' || button.id === 'saveAndAddBtn2') {
+                        // Wait a moment for the save to complete
+                        setTimeout(() => {
+                            addToGallery({ target: button });
+                        }, 500);
+                    }
                 } else {
                     // Fall back to standard download if the non-dialog approach fails
                     saveFileWithDialog(newFile, currentFile.name);
                     showStatus('✅ PNG file downloaded successfully!', 'success');
+                    
+                    // If this was triggered by the "Save and Add to Gallery" button
+                    if (button.id === 'saveAndAddBtn' || button.id === 'saveAndAddBtn2') {
+                        // Wait a moment for the download to start
+                        setTimeout(() => {
+                            addToGallery({ target: button });
+                        }, 500);
+                    }
                 }
             } catch (error) {
                 // Remove loading state in case of error
@@ -1358,21 +1331,6 @@
             URL.revokeObjectURL(blobURL);
         }
         
-        // Legacy download function (keeping for reference but using new save methods)
-        function downloadFile(blob, filename) {
-            saveFileWithDialog(blob, filename);
-        }
-        
-        // Legacy download function (keeping for reference but using new save methods)
-        function saveFileDirectly(blob, filename) {
-            saveFileWithDialog(blob, filename);
-        }
-        
-        // View gallery button click handler
-        viewGalleryBtn.addEventListener('click', () => {
-            window.location.href = 'gallery.html';
-        });
-        
         // Collect metadata from form
         function collectMetadata() {
             const metadata = {};
@@ -1449,33 +1407,6 @@
             }
         }
         
-        // Add hamburger menu functionality
-        const hamburgerIcon = document.querySelector('.hamburger-icon');
-        const hamburgerMenu = document.querySelector('.hamburger-menu');
-        
-        hamburgerIcon.addEventListener('click', () => {
-            hamburgerIcon.classList.toggle('show');
-            hamburgerMenu.classList.toggle('show');
-        });
-        
-        // Close menu when clicking outside
-        document.addEventListener('click', (e) => {
-            if (hamburgerMenu.classList.contains('show') && 
-                !hamburgerMenu.contains(e.target) && 
-                !hamburgerIcon.contains(e.target)) {
-                hamburgerIcon.classList.remove('show');
-                hamburgerMenu.classList.remove('show');
-            }
-        });
-        
-        // Close menu when pressing Escape
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && hamburgerMenu.classList.contains('show')) {
-                hamburgerIcon.classList.remove('show');
-                hamburgerMenu.classList.remove('show');
-            }
-        });
-
         // URL Modal functionality
         loadFromUrlBtn.addEventListener('click', () => {
             urlModal.style.display = 'block';
@@ -1541,7 +1472,9 @@
                         const convertedFile = await convertToPNG(file);
                         currentFile = convertedFile;
                         saveFileBtn.disabled = false;
+                        saveFileBtn2.disabled = false;
                         addToGalleryBtn.disabled = false;
+                        saveAndAddBtn.disabled = false;
                         
                         // Create object URL for preview
                         const objectUrl = URL.createObjectURL(convertedFile);
@@ -1601,29 +1534,170 @@
             }
         }
 
-        // Update the editImage function in gallery.html to communicate with the editor
-        function editImage(imageUrl, filename) {
-            const modal = document.getElementById('pngEditorModal');
-            const frame = document.getElementById('pngEditorFrame');
+        // Add to gallery button click handlers
+        addToGalleryBtn.addEventListener('click', addToGallery);
+        addToGalleryBtn2.addEventListener('click', addToGallery);
+        
+        // View gallery button click handler
+        viewGalleryBtn.addEventListener('click', () => {
+            // Notify parent window to close the editor
+            if (window.parent !== window) {
+                window.parent.postMessage({ type: 'closeEditor' }, '*');
+            } else {
+                window.location.href = 'gallery.html';
+            }
+        });
+        
+        // Function to add the current PNG to the gallery
+        async function addToGallery(event) {
+            if (!currentFile) {
+                showStatus('No file loaded', 'error');
+                return;
+            }
             
-            // Show the modal
-            modal.style.display = 'block';
-            
-            // Wait for the iframe to load
-            frame.onload = () => {
-                // Send the image data to the editor
-                frame.contentWindow.postMessage({
-                    type: 'loadImage',
-                    imageUrl: imageUrl,
-                    filename: filename
-                }, '*');
-            };
-            
-            // Load the editor if not already loaded
-            if (frame.src !== 'png-editor.html') {
-                frame.src = 'png-editor.html';
+            try {
+                // Add loading state to the clicked button
+                const button = event.target;
+                button.classList.add('loading');
+                button.textContent = 'Adding...';
+                
+                // Show status immediately
+                showStatus('Adding to gallery...', 'info');
+                
+                // Check if it's a PNG file
+                if (!currentFile.type.includes('png')) {
+                    showStatus('Only PNG files can be added to the gallery.', 'error');
+                    button.classList.remove('loading');
+                    button.textContent = 'Add to Gallery';
+                    return;
+                }
+                
+                // Apply current metadata to the file
+                const metadata = collectMetadata();
+                const fileWithMetadata = await pngMetadata.writeMetadata(currentFile, metadata);
+                
+                // Get the filename (use current file name or a default)
+                const savedFileName = currentFile.name || 'metadata_edited.png';
+                
+                // Convert the Blob to Base64 string instead of using object URL
+                const base64Data = await blobToBase64(fileWithMetadata);
+                
+                // Load the existing gallery entries from localStorage
+                let imageEntries = [];
+                const savedEntries = localStorage.getItem('imageEntries');
+                if (savedEntries) {
+                    try {
+                        imageEntries = JSON.parse(savedEntries);
+                    } catch (e) {
+                        console.error('Error parsing saved entries:', e);
+                        imageEntries = [];
+                    }
+                }
+                
+                // Check for duplicates based on file name and size
+                const isDuplicate = imageEntries.some(entry => 
+                    entry.handle.name === savedFileName && 
+                    entry.handle.size === fileWithMetadata.size
+                );
+                
+                if (isDuplicate) {
+                    showStatus('This image is already in the gallery', 'warning');
+                    button.classList.remove('loading');
+                    button.textContent = 'Add to Gallery';
+                    return;
+                }
+                
+                // Create basic metadata for the gallery entry
+                const galleryMetadata = {
+                    "Name": savedFileName,
+                    "Size": formatFileSize(fileWithMetadata.size),
+                    "Type": fileWithMetadata.type,
+                    "Last Modified": new Date().toLocaleString()
+                };
+                
+                // Add metadata from form to gallery metadata
+                Object.entries(metadata).forEach(([key, value]) => {
+                    if (value) {
+                        galleryMetadata[key] = value;
+                    }
+                });
+                
+                // Add the new entry to the gallery with proper structure
+                const newEntry = {
+                    handle: {
+                        name: savedFileName,
+                        size: fileWithMetadata.size,
+                        lastModified: new Date().getTime()
+                    },
+                    base64Data: base64Data,
+                    metadata: galleryMetadata,
+                    objectUrl: null  // Ensure objectUrl is null for new entries
+                };
+                
+                // Add the new entry
+                imageEntries.push(newEntry);
+                
+                // Save to localStorage with error handling
+                try {
+                    localStorage.setItem('imageEntries', JSON.stringify(imageEntries));
+                    
+                    // Remove loading state
+                    button.classList.remove('loading');
+                    button.textContent = 'Add to Gallery';
+                    
+                    // Show success message
+                    showStatus('File added to gallery successfully', 'success');
+                    
+                    // Notify parent window about the new image
+                    if (window.parent !== window) {
+                        window.parent.postMessage({
+                            type: 'imageAdded',
+                            imageEntry: newEntry
+                        }, '*');
+                    }
+                    
+                    // Redirect to gallery page after a short delay
+                    setTimeout(() => {
+                        if (window.parent !== window) {
+                            window.parent.postMessage({ type: 'closeEditor' }, '*');
+                        } else {
+                            window.location.href = 'gallery.html';
+                        }
+                    }, 1000);
+                    
+                } catch (storageError) {
+                    // If storage fails, remove the entry we just added
+                    imageEntries.pop();
+                    throw new Error('Failed to save to gallery: Storage limit reached or error saving data');
+                }
+                
+            } catch (error) {
+                // Remove loading state in case of error
+                if (event && event.target) {
+                    event.target.classList.remove('loading');
+                    event.target.textContent = 'Add to Gallery';
+                }
+                
+                showStatus(`Error adding to gallery: ${error.message}`, 'error');
+                console.error(error);
             }
         }
+        
+        // Helper function to convert blob to base64 string
+        function blobToBase64(blob) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+        }
+
+        // Save file button click handlers
+        saveFileBtn.addEventListener('click', saveWithMetadata);
+        saveFileBtn2.addEventListener('click', saveWithMetadata);
+        saveAndAddBtn.addEventListener('click', saveWithMetadata);
+        saveAndAddBtn2.addEventListener('click', saveWithMetadata);
     </script>
 </body>
 </html> 

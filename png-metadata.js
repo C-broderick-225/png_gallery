@@ -296,16 +296,6 @@ class PNGMetadata {
     }
 
     /**
-     * Split PNG file into chunks
-     * @param {ArrayBuffer} buffer - The PNG file buffer
-     * @returns {Array} - Array of chunk objects
-     */
-    splitIntoChunks(buffer) {
-        const { chunks } = this.analyzeChunks(buffer);
-        return chunks;
-    }
-
-    /**
      * Check if buffer is a valid PNG
      * @param {DataView} view - DataView of the buffer
      * @returns {boolean} - true if valid PNG
