@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PNG Metadata Editor</title>
+    <title>PNG Batch Metadata Editor</title>
     <!-- Add Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
@@ -28,7 +28,7 @@
             top: 0;
             left: 0;
             right: 0;
-            height: 60px;
+            height: 50px;
             background: rgba(45, 45, 45, 0.6);
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
@@ -41,118 +41,10 @@
             padding: 0 20px;
         }
         
-        .header-left, .header-center, .header-right {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .primary-btn {
-            background: rgba(66, 66, 66, 0.6);
-            color: #e0e0e0;
-            border: none;
-            border-radius: 6px;
-            padding: 8px 15px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 14px;
-            backdrop-filter: blur(5px);
-            -webkit-backdrop-filter: blur(5px);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-        }
-        
-        .primary-btn:hover {
-            background: rgba(97, 97, 97, 0.7);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        }
-        
-        .secondary-btn {
-            background: rgba(45, 45, 45, 0.6);
-            color: #e0e0e0;
-            border: none;
-            border-radius: 6px;
-            padding: 8px 15px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 14px;
-            backdrop-filter: blur(5px);
-            -webkit-backdrop-filter: blur(5px);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-        }
-        
-        .secondary-btn:hover {
-            background: rgba(66, 66, 66, 0.7);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        }
-        
-        .success-btn {
-            background: rgba(76, 175, 80, 0.6);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            padding: 8px 15px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 14px;
-            backdrop-filter: blur(5px);
-            -webkit-backdrop-filter: blur(5px);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-        }
-        
-        .success-btn:hover {
-            background: rgba(76, 175, 80, 0.7);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        }
-        
-        .success-btn:disabled {
-            background: rgba(76, 175, 80, 0.3);
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-        
-        .secondary-btn:disabled {
-            background: rgba(45, 45, 45, 0.3);
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-        
-        .primary-btn:disabled {
-            background: rgba(66, 66, 66, 0.3);
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-        
-        button i {
-            font-size: 16px;
-            color: #909090;
-            transition: color 0.2s ease;
-        }
-        
-        button:hover i {
-            color: #e0e0e0;
-        }
-        
-        .success-btn i {
-            color: rgba(255, 255, 255, 0.8);
-        }
-        
-        .success-btn:hover i {
-            color: white;
+        .static-header h1 {
+            margin: 0;
+            color: #ffffff;
+            font-size: 24px;
         }
         
         .content-wrapper {
@@ -189,11 +81,80 @@
             flex: 1;
             overflow: hidden;
             border: 1px solid rgba(255, 255, 255, 0.1);
-            height: calc(100vh - 120px);
+        }
+        
+        .file-list-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            background: rgba(45, 45, 45, 0.6);
+            border-radius: 6px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .file-list-item:hover {
+            background: rgba(66, 66, 66, 0.6);
+            transform: translateX(3px);
+        }
+        
+        .file-list-item.selected {
+            background: rgba(76, 175, 80, 0.3);
+            border-color: rgba(76, 175, 80, 0.5);
+        }
+        
+        .file-list-item input[type="checkbox"] {
+            margin-right: 10px;
+        }
+        
+        .file-list-item .file-info {
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        .file-list-item .file-name {
+            font-weight: 500;
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .file-list-item .file-size {
+            font-size: 12px;
+            color: #909090;
+        }
+        
+        .file-list-item .remove-file {
+            padding: 4px 8px;
+            background: rgba(244, 67, 54, 0.2);
+            border-radius: 4px;
+            color: #f44336;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .file-list-item .remove-file:hover {
+            background: rgba(244, 67, 54, 0.3);
+        }
+        
+        .file-list {
+            width: 100%;
+            max-height: calc(100% - 60px);
+            overflow-y: auto;
+        }
+        
+        .file-list-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
         }
         
         .image-preview {
-            flex: 2;
+            flex: 1;
             background: rgba(26, 26, 26, 0.6);
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
@@ -202,39 +163,17 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
             overflow: hidden;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            position: relative;
         }
         
         .image-preview img {
             max-width: 100%;
-            max-height: 100%;
-            width: auto;
-            height: auto;
+            max-height: calc(100% - 60px);
             object-fit: contain;
-            margin: 0;
+            margin-bottom: 20px;
             border-radius: 4px;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-        }
-        
-        .image-preview h3 {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            margin: 0;
-            z-index: 1;
-            background: rgba(0, 0, 0, 0.5);
-            padding: 8px 15px;
-            border-radius: 4px;
-            backdrop-filter: blur(5px);
-            -webkit-backdrop-filter: blur(5px);
         }
         
         .file-info {
@@ -252,33 +191,6 @@
         
         .file-info div:last-child {
             border-bottom: none;
-        }
-        
-        .editor-controls {
-            flex: 0.5;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            padding: 15px;
-            background: rgba(26, 26, 26, 0.6);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            min-width: 200px;
-        }
-        
-        .controls-group {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        
-        .controls-group button {
-            width: 100%;
-            justify-content: flex-start;
-            padding: 10px 15px;
         }
         
         .metadata-form {
@@ -1019,50 +931,22 @@
             animation: spin 1s ease-in-out infinite;
             margin-left: 8px;
         }
-
-        .save-actions {
-            display: flex;
-            justify-content: center;
-            gap: 15px;
-            margin-top: 20px;
-            padding: 15px;
-            background: rgba(45, 45, 45, 0.6);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .save-actions button {
-            min-width: 150px;
-            justify-content: center;
-        }
-
-        .save-actions .success-btn {
-            background: rgba(76, 175, 80, 0.6);
-        }
-
-        .save-actions .success-btn:hover {
-            background: rgba(76, 175, 80, 0.7);
-        }
-
-        .save-actions .secondary-btn {
-            background: rgba(45, 45, 45, 0.6);
-        }
-
-        .save-actions .secondary-btn:hover {
-            background: rgba(66, 66, 66, 0.7);
-        }
     </style>
 </head>
 <body>
     <div class="static-header">
-        <h1>PNG Metadata Editor</h1>
+        <div class="top-nav">
+            <button id="openFileBtn"><i class="fas fa-folder-open"></i>Open File</button>
+            <button id="loadFromUrlBtn"><i class="fas fa-link"></i>Load from URL</button>
+            <button id="viewGalleryBtn"><i class="fas fa-images"></i>View Gallery</button>
+            <button id="saveFileBtn" class="success" disabled><i class="fas fa-save"></i>Save PNG</button>
+            <button id="addToGalleryBtn" disabled><i class="fas fa-plus"></i>Add to Gallery</button>
+            <button id="saveAndAddBtn" class="success" disabled><i class="fas fa-save"></i>Save & Add to Gallery</button>
+        </div>
     </div>
 
     <div class="content-wrapper">
-        <input type="file" id="fileInput" accept="image/*" style="display: none;">
+        <input type="file" id="fileInput" accept="image/*" multiple style="display: none;">
         
         <div class="toast-container" id="toastContainer"></div>
         
@@ -1070,33 +954,34 @@
         <div id="urlModal" class="modal">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h3>Load Image from URL</h3>
+                    <h3>Load Images from URL</h3>
                     <button class="modal-close">&times;</button>
                 </div>
                 <div class="url-input-group">
-                    <input type="url" id="urlInput" placeholder="Enter image URL" autocomplete="off">
+                    <input type="url" id="urlInput" placeholder="Enter image URL (one per line)" autocomplete="off">
                 </div>
                 <div class="modal-actions">
                     <button class="cancel">Cancel</button>
-                    <button class="load">Load Image</button>
+                    <button class="load">Load Images</button>
                 </div>
             </div>
         </div>
         
         <div class="editor-panel">
+            <div class="file-list-panel">
+                <h3>Loaded Images</h3>
+                <div class="file-list" id="fileList">
+                    <!-- File list items will be added here -->
+                </div>
+                <div class="file-list-actions">
+                    <button id="selectAllBtn" class="secondary"><i class="fas fa-check-double"></i>Select All</button>
+                    <button id="deselectAllBtn" class="secondary"><i class="fas fa-times"></i>Deselect All</button>
+                </div>
+            </div>
+            
             <div class="image-preview">
                 <h3>Image Preview</h3>
                 <img id="previewImage" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" alt="Preview">
-            </div>
-            
-            <div class="editor-controls">
-                <div class="controls-group">
-                    <button id="openFileBtn" class="primary-btn"><i class="fas fa-folder-open"></i>Open File</button>
-                    <button id="loadFromUrlBtn" class="primary-btn"><i class="fas fa-link"></i>Load from URL</button>
-                </div>
-                <div class="controls-group">
-                    <button id="viewGalleryBtn" class="secondary-btn"><i class="fas fa-images"></i>View Gallery</button>
-                </div>
             </div>
             
             <div class="metadata-form">
@@ -1106,14 +991,13 @@
                         <label for="keywords">Keywords (comma-separated)</label>
                         <input type="text" id="keywords" name="Keywords" placeholder="keyword1, keyword2, ...">
                     </div>
+                    <div class="form-actions">
+                        <button id="saveFileBtn2" class="success" disabled><i class="fas fa-save"></i>Save PNG</button>
+                        <button id="addToGalleryBtn2" class="secondary" disabled><i class="fas fa-plus"></i>Add to Gallery</button>
+                        <button id="saveAndAddBtn2" class="success" disabled><i class="fas fa-save"></i>Save & Add to Gallery</button>
+                    </div>
                 </form>
             </div>
-        </div>
-
-        <div class="save-actions">
-            <button id="saveFileBtn" class="success-btn" disabled><i class="fas fa-save"></i>Save PNG</button>
-            <button id="addToGalleryBtn" class="secondary-btn" disabled><i class="fas fa-plus"></i>Add to Gallery</button>
-            <button id="saveAndAddBtn" class="success-btn" disabled><i class="fas fa-save"></i>Save & Add</button>
         </div>
     </div>
     
@@ -1127,7 +1011,7 @@
     <script>
         // Initialize the PNG metadata editor
         const pngMetadata = new PNGMetadata();
-        let currentFile = null;
+        let loadedFiles = new Map(); // Map to store loaded files with their metadata
         let currentFileHandle = null;
         let hasFileSystemAccess = false;
         
@@ -1170,10 +1054,15 @@
         const fileInput = document.getElementById('fileInput');
         const previewImage = document.getElementById('previewImage');
         const metadataForm = document.getElementById('metadataForm');
+        const fileList = document.getElementById('fileList');
+        const selectAllBtn = document.getElementById('selectAllBtn');
+        const deselectAllBtn = document.getElementById('deselectAllBtn');
         const openFileBtn = document.getElementById('openFileBtn');
         const loadFromUrlBtn = document.getElementById('loadFromUrlBtn');
         const saveFileBtn = document.getElementById('saveFileBtn');
+        const saveFileBtn2 = document.getElementById('saveFileBtn2');
         const addToGalleryBtn = document.getElementById('addToGalleryBtn');
+        const addToGalleryBtn2 = document.getElementById('addToGalleryBtn2');
         const viewGalleryBtn = document.getElementById('viewGalleryBtn');
         const statusMessage = document.getElementById('statusMessage');
         const urlModal = document.getElementById('urlModal');
@@ -1181,15 +1070,12 @@
         
         // Update button text based on browser support
         if (!hasFileSystemAccess) {
-            saveFileBtn.textContent = 'Save';
+            saveFileBtn.textContent = 'Save Selected';
+            saveFileBtn2.textContent = 'Save Selected';
         }
-        
-        // Update tooltips for Add to Gallery buttons
-        document.getElementById('addToGalleryBtn').title = 'Add this image directly to the gallery without saving to disk';
         
         // Open file button click handler
         openFileBtn.addEventListener('click', async () => {
-            // Just use the standard file input if File System Access API is not available or we're in a cross-origin iframe
             if (!hasFileSystemAccess) {
                 fileInput.click();
                 return;
@@ -1201,52 +1087,49 @@
                         description: 'Image Files',
                         accept: {'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg']}
                     }],
-                    multiple: false
+                    multiple: true
                 };
                 
-                const [fileHandle] = await window.showOpenFilePicker(options);
-                currentFileHandle = fileHandle;
+                const fileHandles = await window.showOpenFilePicker(options);
                 
-                const file = await fileHandle.getFile();
-                await loadPngFile(file);
-                showStatus('File loaded successfully', 'success');
+                for (const fileHandle of fileHandles) {
+                    const file = await fileHandle.getFile();
+                    await loadPngFile(file);
+                }
+                
+                showStatus('Files loaded successfully', 'success');
             } catch (error) {
-                console.error('Error opening file:', error);
+                console.error('Error opening files:', error);
                 
-                // If we get a cross-origin error or any other error, fall back to the standard file input
                 if (error.name === 'SecurityError' || 
                     error.message?.includes('Cross origin') || 
                     error.name !== 'AbortError') {
                     
-                    // If it's a security error, disable File System Access API for future operations
                     if (error.name === 'SecurityError' || error.message?.includes('Cross origin')) {
                         hasFileSystemAccess = false;
-                        saveFileBtn.textContent = 'Save';
+                        saveFileBtn.textContent = 'Save Selected';
                     }
                     
-                    // Fall back to standard file input
                     fileInput.click();
                 } 
-                // Only show error for non-abort errors (abort just means user cancelled)
                 else if (error.name !== 'AbortError') {
-                    showStatus(`Error opening file: ${error.message}`, 'error');
+                    showStatus(`Error opening files: ${error.message}`, 'error');
                 }
             }
         });
         
-        // File input change handler (fallback for browsers without File System Access API)
+        // File input change handler
         fileInput.addEventListener('change', async (event) => {
-            const file = event.target.files[0];
-            if (!file) return;
+            const files = event.target.files;
+            if (!files.length) return;
             
             try {
-                // Clear the file handle since we're using the standard file input
-                currentFileHandle = null;
-                
-                await loadPngFile(file);
-                showStatus('File loaded successfully', 'success');
+                for (const file of files) {
+                    await loadPngFile(file);
+                }
+                showStatus('Files loaded successfully', 'success');
             } catch (error) {
-                showStatus(`Error loading file: ${error.message}`, 'error');
+                showStatus(`Error loading files: ${error.message}`, 'error');
                 console.error(error);
             }
         });
@@ -1259,46 +1142,215 @@
                 return;
             }
             
-            currentFile = file;
-            saveFileBtn.disabled = false;
-            addToGalleryBtn.disabled = false;
-            saveAndAddBtn.disabled = false;
-            
-            // Create object URL for preview
-            const objectUrl = URL.createObjectURL(file);
-            previewImage.src = objectUrl;
-            
-            // Only try to read metadata for PNG files
-            if (file.type.includes('png')) {
+            // If it's not a PNG file, convert it
+            if (!file.type.includes('png')) {
                 try {
-                    // Load metadata
-                    const metadata = await pngMetadata.readMetadata(currentFile);
-                    populateMetadataForm(metadata);
+                    showStatus('Converting image to PNG format...', 'info');
+                    const convertedFile = await convertToPNG(file);
+                    await addFileToList(convertedFile);
                 } catch (error) {
-                    showStatus(`Error reading PNG metadata: ${error.message}`, 'error');
+                    showStatus(`Error converting image: ${error.message}`, 'error');
                     console.error(error);
+                    return;
                 }
             } else {
-                // Clear metadata form for non-PNG files
-                populateMetadataForm({});
+                await addFileToList(file);
             }
         }
         
-        // Populate metadata form
-        function populateMetadataForm(metadata) {
-            // Clear form first
-            const inputs = metadataForm.querySelectorAll('input, textarea');
-            inputs.forEach(input => {
-                if (input.name) {
-                    input.value = metadata[input.name] || '';
-                }
+        // Function to convert image to PNG format
+        async function convertToPNG(file) {
+            return new Promise((resolve, reject) => {
+                // Create a FileReader to read the image file
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    // Create an image element
+                    const img = new Image();
+                    img.onload = () => {
+                        // Create a canvas element
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        
+                        // Draw the image on the canvas
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0);
+                        
+                        // Convert canvas to blob
+                        canvas.toBlob((blob) => {
+                            if (blob) {
+                                // Create a new File object with the PNG blob
+                                const pngFile = new File([blob], file.name.replace(/\.[^/.]+$/, '') + '.png', {
+                                    type: 'image/png'
+                                });
+                                resolve(pngFile);
+                            } else {
+                                reject(new Error('Failed to convert image to PNG'));
+                            }
+                        }, 'image/png');
+                    };
+                    
+                    img.onerror = () => {
+                        reject(new Error('Failed to load image'));
+                    };
+                    
+                    // Load the image from the FileReader result
+                    img.src = e.target.result;
+                };
+                
+                reader.onerror = () => {
+                    reject(new Error('Failed to read file'));
+                };
+                
+                // Read the file as Data URL
+                reader.readAsDataURL(file);
             });
         }
         
+        // Add file to the list
+        async function addFileToList(file) {
+            try {
+                // Load metadata
+                const metadata = await pngMetadata.readMetadata(file);
+                
+                // Create file entry
+                const fileEntry = {
+                    file: file,
+                    metadata: metadata,
+                    selected: false
+                };
+                
+                // Add to loaded files map
+                loadedFiles.set(file.name, fileEntry);
+                
+                // Create file list item
+                const fileItem = createFileListItem(file, fileEntry);
+                fileList.appendChild(fileItem);
+                
+                // Update preview if this is the first file
+                if (loadedFiles.size === 1) {
+                    updatePreview(file);
+                }
+                
+                // Update button states
+                updateButtonStates();
+                
+            } catch (error) {
+                showStatus(`Error reading PNG metadata: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+        
+        // Create file list item
+        function createFileListItem(file, fileEntry) {
+            const div = document.createElement('div');
+            div.className = 'file-list-item';
+            div.innerHTML = `
+                <input type="checkbox" ${fileEntry.selected ? 'checked' : ''}>
+                <div class="file-info">
+                    <div class="file-name">${file.name}</div>
+                    <div class="file-size">${formatFileSize(file.size)}</div>
+                </div>
+                <div class="remove-file"><i class="fas fa-times"></i></div>
+            `;
+            
+            // Add event listeners
+            div.querySelector('input[type="checkbox"]').addEventListener('change', (e) => {
+                fileEntry.selected = e.target.checked;
+                div.classList.toggle('selected', e.target.checked);
+                updateButtonStates();
+            });
+            
+            div.querySelector('.remove-file').addEventListener('click', (e) => {
+                e.stopPropagation();
+                removeFile(file.name);
+            });
+            
+            div.addEventListener('click', (e) => {
+                if (!e.target.closest('.remove-file')) {
+                    const checkbox = div.querySelector('input[type="checkbox"]');
+                    checkbox.checked = !checkbox.checked;
+                    fileEntry.selected = checkbox.checked;
+                    div.classList.toggle('selected', checkbox.checked);
+                    updateButtonStates();
+                }
+            });
+            
+            return div;
+        }
+        
+        // Remove file from the list
+        function removeFile(fileName) {
+            const fileEntry = loadedFiles.get(fileName);
+            if (fileEntry) {
+                loadedFiles.delete(fileName);
+                const fileItem = fileList.querySelector(`[data-file-name="${fileName}"]`);
+                if (fileItem) {
+                    fileItem.remove();
+                }
+                
+                // Update preview if needed
+                if (loadedFiles.size > 0) {
+                    const firstFile = loadedFiles.values().next().value;
+                    updatePreview(firstFile.file);
+                } else {
+                    previewImage.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+                }
+                
+                updateButtonStates();
+            }
+        }
+        
+        // Update preview image
+        function updatePreview(file) {
+            const objectUrl = URL.createObjectURL(file);
+            previewImage.src = objectUrl;
+        }
+        
+        // Update button states based on selection
+        function updateButtonStates() {
+            const hasSelectedFiles = Array.from(loadedFiles.values()).some(entry => entry.selected);
+            const hasFiles = loadedFiles.size > 0;
+            
+            saveFileBtn.disabled = !hasSelectedFiles;
+            saveFileBtn2.disabled = !hasSelectedFiles;
+            addToGalleryBtn.disabled = !hasSelectedFiles;
+            addToGalleryBtn2.disabled = !hasSelectedFiles;
+            saveAndAddBtn.disabled = !hasSelectedFiles;
+            saveAndAddBtn2.disabled = !hasSelectedFiles;
+        }
+        
+        // Select all button handler
+        selectAllBtn.addEventListener('click', () => {
+            loadedFiles.forEach((entry, fileName) => {
+                entry.selected = true;
+                const fileItem = fileList.querySelector(`[data-file-name="${fileName}"]`);
+                if (fileItem) {
+                    fileItem.querySelector('input[type="checkbox"]').checked = true;
+                    fileItem.classList.add('selected');
+                }
+            });
+            updateButtonStates();
+        });
+        
+        // Deselect all button handler
+        deselectAllBtn.addEventListener('click', () => {
+            loadedFiles.forEach((entry, fileName) => {
+                entry.selected = false;
+                const fileItem = fileList.querySelector(`[data-file-name="${fileName}"]`);
+                if (fileItem) {
+                    fileItem.querySelector('input[type="checkbox"]').checked = false;
+                    fileItem.classList.remove('selected');
+                }
+            });
+            updateButtonStates();
+        });
+        
         // Save with metadata function
         async function saveWithMetadata(event) {
-            if (!currentFile) {
-                showStatus('No file loaded', 'error');
+            const selectedFiles = Array.from(loadedFiles.values()).filter(entry => entry.selected);
+            if (selectedFiles.length === 0) {
+                showStatus('No files selected', 'error');
                 return;
             }
             
@@ -1311,98 +1363,81 @@
                 // Show saving status immediately
                 showStatus('Saving metadata...', 'info');
                 
-                let newFile;
                 const metadata = collectMetadata();
+                let savedCount = 0;
                 
-                if (currentFile.type.includes('png')) {
-                    // For PNG files, just update the metadata
-                    newFile = await pngMetadata.writeMetadata(currentFile, metadata);
-                } else {
-                    // For non-PNG files, convert to PNG first
-                    showStatus('Converting image to PNG format...', 'info');
-                    const convertedFile = await convertToPNG(currentFile);
-                    // Then add metadata to the converted PNG
-                    newFile = await pngMetadata.writeMetadata(convertedFile, metadata);
-                }
-                
-                // Generate the new filename
-                const newFileName = currentFile.name.replace(/\.[^/.]+$/, '') + '.png';
-                
-                // Try to use File System Access API if available
-                if (hasFileSystemAccess) {
+                for (const fileEntry of selectedFiles) {
                     try {
-                        const saveResult = await trySaveWithoutDialog(newFile);
-                        if (saveResult) {
-                            showStatus('✅ PNG file saved successfully!', 'success');
+                        const newFile = await pngMetadata.writeMetadata(fileEntry.file, metadata);
+                        fileEntry.file = newFile;
+                        
+                        if (hasFileSystemAccess) {
+                            // Try to save without a dialog using the File System Access API
+                            const saved = await trySaveWithoutDialog(newFile, fileEntry.file.name);
+                            if (saved) {
+                                savedCount++;
+                            } else {
+                                // Fall back to standard download
+                                saveFileWithDialog(newFile, fileEntry.file.name);
+                                savedCount++;
+                            }
                         } else {
-                            // Fall back to download if File System Access fails
-                            saveFileWithDialog(newFile, newFileName);
-                            showStatus('✅ PNG file downloaded successfully!', 'success');
+                            // Use standard download
+                            saveFileWithDialog(newFile, fileEntry.file.name);
+                            savedCount++;
                         }
                     } catch (error) {
-                        // Fall back to download if File System Access fails
-                        saveFileWithDialog(newFile, newFileName);
-                        showStatus('✅ PNG file downloaded successfully!', 'success');
+                        console.error(`Error saving file ${fileEntry.file.name}:`, error);
+                        showStatus(`Error saving ${fileEntry.file.name}: ${error.message}`, 'error');
                     }
-                } else {
-                    // Use download method if File System Access is not available
-                    saveFileWithDialog(newFile, newFileName);
-                    showStatus('✅ PNG file downloaded successfully!', 'success');
                 }
-                
-                // Update currentFile with the new file that has metadata
-                currentFile = new File([newFile], newFileName, { type: 'image/png' });
                 
                 // Remove loading state
                 button.classList.remove('loading');
-                button.textContent = hasFileSystemAccess ? 'Save PNG' : 'Save';
+                button.textContent = hasFileSystemAccess ? 'Save Selected' : 'Save';
                 
-                // Handle "Save and Add to Gallery" if that button was clicked
-                if (button.id === 'saveAndAddBtn') {
-                    // Wait a moment for the save/download to complete
-                    setTimeout(() => {
-                        addToGallery({ target: button });
-                    }, 500);
+                if (savedCount > 0) {
+                    showStatus(`✅ ${savedCount} file(s) saved successfully!`, 'success');
+                    
+                    // If this was triggered by the "Save and Add to Gallery" button
+                    if (button.id === 'saveAndAddBtn' || button.id === 'saveAndAddBtn2') {
+                        // Wait a moment for the save to complete
+                        setTimeout(() => {
+                            addToGallery({ target: button });
+                        }, 500);
+                    }
                 }
-                
             } catch (error) {
                 // Remove loading state in case of error
                 if (event && event.target) {
                     event.target.classList.remove('loading');
-                    event.target.textContent = hasFileSystemAccess ? 'Save PNG' : 'Save';
+                    event.target.textContent = hasFileSystemAccess ? 'Save Selected' : 'Save';
                 }
                 
-                showStatus(`Error saving file: ${error.message}`, 'error');
+                showStatus(`Error saving files: ${error.message}`, 'error');
                 console.error(error);
             }
         }
         
         // Try to save the file without showing a dialog using File System Access API
-        async function trySaveWithoutDialog(blob) {
-            // Check if the File System Access API is available and we're not in a cross-origin iframe
+        async function trySaveWithoutDialog(blob, filename) {
             if (!hasFileSystemAccess) {
-                console.log('File System Access API not available or disabled');
                 return false;
             }
             
             try {
                 let fileHandle;
                 
-                // If we have a stored file handle, use it
                 if (currentFileHandle) {
                     fileHandle = currentFileHandle;
                     
-                    // Verify we have permission to write to this file
                     const options = { mode: 'readwrite' };
                     if (!(await verifyPermission(fileHandle, options))) {
-                        console.log('No permission to write to the file');
                         return false;
                     }
                 } else {
-                    // Otherwise, get a new file handle but with a picker dialog
-                    // This will show a dialog once, but subsequent saves won't
                     const options = {
-                        suggestedName: currentFile.name,
+                        suggestedName: filename,
                         types: [{
                             description: 'PNG Files',
                             accept: {'image/png': ['.png']}
@@ -1410,11 +1445,9 @@
                     };
                     
                     fileHandle = await window.showSaveFilePicker(options);
-                    // Store the file handle for future saves
                     currentFileHandle = fileHandle;
                 }
                 
-                // Get a writable stream and write the blob data
                 const writable = await fileHandle.createWritable();
                 await writable.write(blob);
                 await writable.close();
@@ -1423,14 +1456,12 @@
             } catch (error) {
                 console.error('Failed to save file without dialog:', error);
                 
-                // If we get a cross-origin error, disable File System Access API for future operations
                 if (error.name === 'SecurityError' || error.message?.includes('Cross origin')) {
                     hasFileSystemAccess = false;
-                    saveFileBtn.textContent = 'Save';
+                    saveFileBtn.textContent = 'Save Selected';
                     showStatus('Using download method due to security restrictions', 'info');
                 }
                 
-                // User may have cancelled the save dialog, or any other error
                 return false;
             }
         }
@@ -1447,23 +1478,15 @@
         
         // Save file with a browser dialog (fallback)
         function saveFileWithDialog(blob, filename) {
-            // Create a blob URL
             const blobURL = URL.createObjectURL(blob);
-            
-            // Create a temporary link element
-            const link = document.createElement('a');
-            link.href = blobURL;
-            link.download = filename;
-            
-            // Append to body, click, and remove
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            // Clean up the blob URL
-            setTimeout(() => {
-                URL.revokeObjectURL(blobURL);
-            }, 100);
+            const a = document.createElement('a');
+            a.href = blobURL;
+            a.download = filename;
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(blobURL);
         }
         
         // Collect metadata from form
@@ -1570,302 +1593,57 @@
 
         // Handle URL image loading
         document.querySelector('.modal-actions .load').addEventListener('click', async () => {
-            const url = urlInput.value.trim();
-            if (!url) {
-                showStatus('Please enter a valid URL', 'error');
+            const urls = urlInput.value.trim().split('\n').filter(url => url.trim());
+            if (urls.length === 0) {
+                showStatus('Please enter at least one valid URL', 'error');
                 return;
             }
 
             try {
-                showStatus('Loading image from URL...', 'info');
+                showStatus('Loading images from URLs...', 'info');
                 
-                // Fetch the image
-                const response = await fetch(url);
-                if (!response.ok) {
-                    throw new Error(`Failed to fetch image: ${response.statusText}`);
+                for (const url of urls) {
+                    try {
+                        // Fetch the image
+                        const response = await fetch(url);
+                        if (!response.ok) {
+                            throw new Error(`Failed to fetch image: ${response.statusText}`);
+                        }
+
+                        // Get the blob from the response
+                        const blob = await response.blob();
+                        
+                        // Create a File object from the blob
+                        const fileName = url.split('/').pop() || 'image.png';
+                        const file = new File([blob], fileName, { type: blob.type });
+
+                        // Load the file
+                        await loadPngFile(file);
+                        
+                    } catch (error) {
+                        showStatus(`Error loading ${url}: ${error.message}`, 'error');
+                        console.error(error);
+                    }
                 }
-
-                // Get the blob from the response
-                const blob = await response.blob();
                 
-                // Create a File object from the blob
-                const fileName = url.split('/').pop() || 'image.png';
-                const file = new File([blob], fileName, { type: blob.type });
-
                 // Close the modal
                 urlModal.style.display = 'none';
                 urlInput.value = '';
-
-                // Load the file without conversion
-                await loadPngFile(file);
                 
-                showStatus('Image loaded successfully', 'success');
+                showStatus('URL images loaded', 'success');
             } catch (error) {
-                showStatus(`Error loading image from URL: ${error.message}`, 'error');
+                showStatus(`Error loading images from URLs: ${error.message}`, 'error');
                 console.error(error);
                 urlModal.style.display = 'none';
                 urlInput.value = '';
             }
         });
 
-        // Handle Enter key in URL input
-        urlInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                document.querySelector('.modal-actions .load').click();
-            }
-        });
-
-        // Add communication with parent window
-        window.addEventListener('message', function(event) {
-            // Handle messages from parent window
-            if (event.data.type === 'loadImage') {
-                const { imageUrl, filename } = event.data;
-                loadImageFromUrl(imageUrl, filename);
-            }
-        });
-
-        // Function to load image from URL
-        async function loadImageFromUrl(imageUrl, filename) {
-            try {
-                showStatus('Loading image...', 'info');
-                
-                // Fetch the image
-                const response = await fetch(imageUrl);
-                if (!response.ok) {
-                    throw new Error(`Failed to fetch image: ${response.statusText}`);
-                }
-
-                // Get the blob from the response
-                const blob = await response.blob();
-                
-                // Create a File object from the blob
-                const file = new File([blob], filename || 'image.png', { type: blob.type });
-
-                // Load the file
-                await loadPngFile(file);
-                
-                showStatus('Image loaded successfully', 'success');
-            } catch (error) {
-                showStatus(`Error loading image: ${error.message}`, 'error');
-                console.error(error);
-            }
-        }
-
-        // Add to gallery button click handler
-        addToGalleryBtn.addEventListener('click', addToGallery);
-        
-        // View gallery button click handler
-        viewGalleryBtn.addEventListener('click', () => {
-            // Notify parent window to close the editor
-            if (window.parent !== window) {
-                window.parent.postMessage({ 
-                    type: 'closeEditor',
-                    action: 'deactivate'
-                }, '*');
-            }
-            // If we're not in an iframe, redirect to gallery
-            if (window === window.top) {
-                window.location.href = 'gallery.html';
-            }
-        });
-        
-        // Function to add the current PNG to the gallery
-        async function addToGallery(event) {
-            if (!currentFile) {
-                showStatus('No file loaded', 'error');
-                return;
-            }
-            
-            try {
-                // Add loading state to the clicked button
-                const button = event.target;
-                button.classList.add('loading');
-                button.textContent = 'Adding...';
-                
-                // Show status immediately
-                showStatus('Adding to gallery...', 'info');
-                
-                // Check if it's a PNG file
-                if (!currentFile.type.includes('png')) {
-                    showStatus('Only PNG files can be added to the gallery.', 'error');
-                    button.classList.remove('loading');
-                    button.textContent = 'Add to Gallery';
-                    return;
-                }
-                
-                // Apply current metadata to the file
-                const metadata = collectMetadata();
-                const fileWithMetadata = await pngMetadata.writeMetadata(currentFile, metadata);
-                
-                // Get the filename (use current file name or a default)
-                const savedFileName = currentFile.name || 'metadata_edited.png';
-                
-                // Convert the Blob to Base64 string instead of using object URL
-                const base64Data = await blobToBase64(fileWithMetadata);
-                
-                // Load the existing gallery entries from localStorage
-                let imageEntries = [];
-                const savedEntries = localStorage.getItem('imageEntries');
-                if (savedEntries) {
-                    try {
-                        imageEntries = JSON.parse(savedEntries);
-                    } catch (e) {
-                        console.error('Error parsing saved entries:', e);
-                        imageEntries = [];
-                    }
-                }
-                
-                // Check for duplicates based on file name and size
-                const isDuplicate = imageEntries.some(entry => 
-                    entry.handle.name === savedFileName && 
-                    entry.handle.size === fileWithMetadata.size
-                );
-                
-                if (isDuplicate) {
-                    showStatus('This image is already in the gallery', 'warning');
-                    button.classList.remove('loading');
-                    button.textContent = 'Add to Gallery';
-                    return;
-                }
-                
-                // Create basic metadata for the gallery entry
-                const galleryMetadata = {
-                    "Name": savedFileName,
-                    "Size": formatFileSize(fileWithMetadata.size),
-                    "Type": fileWithMetadata.type,
-                    "Last Modified": new Date().toLocaleString()
-                };
-                
-                // Add metadata from form to gallery metadata
-                Object.entries(metadata).forEach(([key, value]) => {
-                    if (value) {
-                        galleryMetadata[key] = value;
-                    }
-                });
-                
-                // Add the new entry to the gallery with proper structure
-                const newEntry = {
-                    handle: {
-                        name: savedFileName,
-                        size: fileWithMetadata.size,
-                        lastModified: new Date().getTime()
-                    },
-                    base64Data: base64Data,
-                    metadata: galleryMetadata,
-                    objectUrl: null  // Ensure objectUrl is null for new entries
-                };
-                
-                // Add the new entry
-                imageEntries.push(newEntry);
-                
-                // Save to localStorage with error handling
-                try {
-                    localStorage.setItem('imageEntries', JSON.stringify(imageEntries));
-                    
-                    // Remove loading state
-                    button.classList.remove('loading');
-                    button.textContent = 'Add to Gallery';
-                    
-                    // Show success message
-                    showStatus('File added to gallery successfully', 'success');
-                    
-                    // Notify parent window about the new image
-                    if (window.parent !== window) {
-                        window.parent.postMessage({
-                            type: 'imageAdded',
-                            imageEntry: newEntry
-                        }, '*');
-                    }
-                    
-                    // Redirect to gallery page after a short delay
-                    setTimeout(() => {
-                        if (window.parent !== window) {
-                            window.parent.postMessage({ type: 'closeEditor' }, '*');
-                        } else {
-                            window.location.href = 'gallery.html';
-                        }
-                    }, 1000);
-                    
-                } catch (storageError) {
-                    // If storage fails, remove the entry we just added
-                    imageEntries.pop();
-                    throw new Error('Failed to save to gallery: Storage limit reached or error saving data');
-                }
-                
-            } catch (error) {
-                // Remove loading state in case of error
-                if (event && event.target) {
-                    event.target.classList.remove('loading');
-                    event.target.textContent = 'Add to Gallery';
-                }
-                
-                showStatus(`Error adding to gallery: ${error.message}`, 'error');
-                console.error(error);
-            }
-        }
-        
-        // Helper function to convert blob to base64 string
-        function blobToBase64(blob) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
-            });
-        }
-
-        // Save file button click handler
+        // Save file button click handlers
         saveFileBtn.addEventListener('click', saveWithMetadata);
+        saveFileBtn2.addEventListener('click', saveWithMetadata);
         saveAndAddBtn.addEventListener('click', saveWithMetadata);
-
-        // Function to convert image to PNG format
-        async function convertToPNG(file) {
-            return new Promise((resolve, reject) => {
-                // Create a FileReader to read the image file
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    // Create an image element
-                    const img = new Image();
-                    img.onload = () => {
-                        // Create a canvas element
-                        const canvas = document.createElement('canvas');
-                        canvas.width = img.width;
-                        canvas.height = img.height;
-                        
-                        // Draw the image on the canvas
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0);
-                        
-                        // Convert canvas to blob
-                        canvas.toBlob((blob) => {
-                            if (blob) {
-                                // Create a new File object with the PNG blob
-                                const pngFile = new File([blob], file.name.replace(/\.[^/.]+$/, '') + '.png', {
-                                    type: 'image/png'
-                                });
-                                resolve(pngFile);
-                            } else {
-                                reject(new Error('Failed to convert image to PNG'));
-                            }
-                        }, 'image/png');
-                    };
-                    
-                    img.onerror = () => {
-                        reject(new Error('Failed to load image'));
-                    };
-                    
-                    // Load the image from the FileReader result
-                    img.src = e.target.result;
-                };
-                
-                reader.onerror = () => {
-                    reject(new Error('Failed to read file'));
-                };
-                
-                // Read the file as Data URL
-                reader.readAsDataURL(file);
-            });
-        }
+        saveAndAddBtn2.addEventListener('click', saveWithMetadata);
     </script>
 </body>
 </html> 

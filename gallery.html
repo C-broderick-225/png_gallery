@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Image Gallery</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖼️</text></svg>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
         * {
@@ -3105,6 +3106,18 @@
                 const modal = document.getElementById('pngEditorModal');
                 if (modal) {
                     modal.style.display = 'none';
+                }
+                
+                // If deactivate action is specified, also remove active class from container and button
+                if (event.data.action === 'deactivate') {
+                    const metadataEditorContainer = document.getElementById('metadataEditorContainer');
+                    const openMetadataEditorBtn = document.getElementById('openMetadataEditorBtn');
+                    if (metadataEditorContainer) {
+                        metadataEditorContainer.classList.remove('active');
+                    }
+                    if (openMetadataEditorBtn) {
+                        openMetadataEditorBtn.classList.remove('active');
+                    }
                 }
             } else if (event.data.type === 'imageAdded') {
                 // Add the new image to the gallery immediately
