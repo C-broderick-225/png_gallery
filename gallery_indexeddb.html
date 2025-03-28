@@ -1,0 +1,1577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Gallery (IndexedDB)</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖼️</text></svg>">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #1a1a1a;
+            padding: 0;
+            color: #e0e0e0;
+            margin: 0;
+            min-height: 100vh;
+            position: relative;
+        }
+        
+        body.drag-over::after {
+            content: 'Drop images here';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(45, 45, 45, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+            z-index: 9999;
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+        }
+        
+        .static-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: rgba(45, 45, 45, 0.6);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4),
+                        0 0 0 1px rgba(255, 255, 255, 0.1);
+            z-index: 999;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+        }
+
+        .header-title {
+            color: #ffffff;
+            font-size: 24px;
+            font-weight: bold;
+            margin-right: auto;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 10px;
+            margin-right: 10px;
+        }
+        
+        .content-wrapper {
+            padding-top: 80px;
+            padding-left: 20px;
+            padding-right: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .gallery-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            background: rgba(45, 45, 45, 0.6);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .control-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .primary-btn {
+            background: rgba(66, 66, 66, 0.6);
+            color: #e0e0e0;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 15px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+        
+        .primary-btn:hover {
+            background: rgba(97, 97, 97, 0.7);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .primary-btn i {
+            font-size: 16px;
+            color: #909090;
+            transition: color 0.2s ease;
+        }
+
+        .primary-btn:hover i {
+            color: #e0e0e0;
+        }
+        
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(var(--thumbnail-size, 250px), 1fr));
+            gap: 20px;
+            padding: 20px 0;
+        }
+        
+        .thumbnail {
+            position: relative;
+            background: rgba(45, 45, 45, 0.6);
+            border-radius: 12px;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            height: var(--thumbnail-size, 250px);
+            display: flex;
+            flex-direction: column;
+            aspect-ratio: 1;
+        }
+        
+        .thumbnail:hover {
+            transform: translateY(-5px) scale(1.02);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        .thumbnail-img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            background: linear-gradient(145deg, #1a1a1a, #151515);
+            padding: 0;
+            border-radius: 12px;
+        }
+        
+        .thumbnail:hover .thumbnail-img {
+            transform: scale(1.08);
+        }
+        
+        .thumbnail-info {
+            padding: 12px;
+            font-size: 12px;
+            color: #e0e0e0;
+            word-break: break-word;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to bottom, rgba(45, 45, 45, 0.8), rgba(45, 45, 45, 0.95));
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+        }
+        
+        .thumbnail-info div:first-child {
+            font-weight: 500;
+            margin-bottom: 4px;
+            color: #ffffff;
+        }
+        
+        .thumbnail-info div:last-child {
+            color: #909090;
+            font-size: 11px;
+        }
+
+        /* Modal viewer styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal.show {
+            opacity: 1;
+        }
+
+        .modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            max-width: 90%;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .modal-image {
+            max-width: 100%;
+            max-height: 80vh;
+            object-fit: contain;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        .modal-controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+            padding: 15px;
+            background: rgba(45, 45, 45, 0.6);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .modal-btn {
+            background: rgba(66, 66, 66, 0.6);
+            color: #e0e0e0;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 15px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal-btn:hover {
+            background: rgba(97, 97, 97, 0.7);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-btn i {
+            font-size: 16px;
+            color: #909090;
+            transition: color 0.2s ease;
+        }
+
+        .modal-btn:hover i {
+            color: #e0e0e0;
+        }
+
+        .modal-nav {
+            position: fixed;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            padding: 0 20px;
+            pointer-events: none;
+        }
+
+        .modal-nav button {
+            pointer-events: auto;
+            background: rgba(45, 45, 45, 0.6);
+            color: #e0e0e0;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal-nav button:hover {
+            background: rgba(97, 97, 97, 0.7);
+            transform: scale(1.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-info {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(45, 45, 45, 0.6);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #e0e0e0;
+            font-size: 14px;
+            max-width: 80%;
+            text-align: center;
+        }
+
+        /* Toast notifications */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1001;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .toast {
+            background: rgba(45, 45, 45, 0.9);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            color: #e0e0e0;
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transform: translateX(120%);
+            transition: transform 0.3s ease;
+            max-width: 300px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .toast.show {
+            transform: translateX(0);
+        }
+
+        .toast.error {
+            background: rgba(244, 67, 54, 0.9);
+        }
+
+        .toast.success {
+            background: rgba(76, 175, 80, 0.9);
+        }
+
+        .toast i {
+            font-size: 18px;
+        }
+
+        .toast-content {
+            flex: 1;
+            font-size: 14px;
+        }
+
+        /* Hamburger Menu Styles */
+        .hamburger-icon {
+            position: relative;
+            width: 35px;
+            height: 35px;
+            background: #424242;
+            border-radius: 6px;
+            cursor: pointer;
+            z-index: 1002;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            margin-left: 10px;
+        }
+
+        .hamburger-icon:hover {
+            background: #616161;
+            transform: scale(1.05);
+        }
+
+        .hamburger-icon span {
+            display: block;
+            width: 20px;
+            height: 2px;
+            background: #e0e0e0;
+            transition: all 0.3s ease;
+        }
+
+        .hamburger-icon.show span:nth-child(1) {
+            transform: translateY(7px) rotate(45deg);
+        }
+
+        .hamburger-icon.show span:nth-child(2) {
+            opacity: 0;
+        }
+
+        .hamburger-icon.show span:nth-child(3) {
+            transform: translateY(-7px) rotate(-45deg);
+        }
+
+        .hamburger-menu {
+            position: fixed;
+            top: 0;
+            right: -250px;
+            width: 250px;
+            height: 100vh;
+            background: rgba(45, 45, 45, 0.6);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            box-shadow: -2px 0 20px rgba(0, 0, 0, 0.4),
+                        0 0 0 1px rgba(255, 255, 255, 0.1);
+            transition: right 0.3s ease;
+            z-index: 1000;
+            padding: 15px;
+            padding-top: 60px;
+            overflow-y: auto;
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .hamburger-menu.show {
+            right: 0;
+        }
+
+        .menu-section {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+            z-index: 1001;
+        }
+
+        .menu-section:first-child {
+            margin-top: 10px;
+        }
+
+        .menu-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .menu-section h3 {
+            color: #e0e0e0;
+            font-size: 14px;
+            margin-bottom: 12px;
+            padding-left: 8px;
+            border-left: 2px solid rgba(255, 255, 255, 0.2);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .menu-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .menu-buttons button {
+            width: 100%;
+            text-align: left;
+            padding: 10px 12px;
+            background: rgba(66, 66, 66, 0.6);
+            color: #e0e0e0;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 14px;
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .menu-buttons button i {
+            width: 20px;
+            text-align: center;
+            font-size: 16px;
+            color: #909090;
+            transition: color 0.2s ease;
+        }
+
+        .menu-buttons button:hover {
+            background: rgba(97, 97, 97, 0.7);
+            transform: translateX(3px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .menu-buttons button:hover i {
+            color: #e0e0e0;
+        }
+
+        .menu-buttons button.secondary {
+            background: rgba(45, 45, 45, 0.6);
+        }
+
+        .menu-buttons button.secondary:hover {
+            background: rgba(66, 66, 66, 0.7);
+        }
+
+        .menu-buttons button.active {
+            background: rgba(76, 175, 80, 0.6) !important;
+            color: white !important;
+        }
+
+        .menu-buttons button.active i {
+            color: white !important;
+        }
+
+        .menu-buttons button.active:hover {
+            background: rgba(76, 175, 80, 0.7) !important;
+        }
+
+        /* Size control styles */
+        .size-control {
+            background: rgba(66, 66, 66, 0.6);
+            padding: 12px;
+            border-radius: 6px;
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .size-control label {
+            display: block;
+            margin-bottom: 8px;
+            color: #e0e0e0;
+            font-size: 13px;
+        }
+
+        .size-control input[type="range"] {
+            width: 100%;
+            height: 3px;
+            -webkit-appearance: none;
+            background: #616161;
+            border-radius: 2px;
+            outline: none;
+            margin: 8px 0;
+        }
+
+        .size-control input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #616161;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .size-control input[type="range"]::-webkit-slider-thumb:hover {
+            background: #909090;
+            transform: scale(1.1);
+        }
+
+        .size-control #sizeValue {
+            display: block;
+            text-align: center;
+            color: #909090;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        /* Metadata editor styles */
+        .metadata-editor-panel {
+            position: fixed;
+            top: 0;
+            right: -300px;
+            width: 300px;
+            height: 100vh;
+            background: rgba(45, 45, 45, 0.6);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            box-shadow: -2px 0 20px rgba(0, 0, 0, 0.4);
+            transition: right 0.3s ease;
+            z-index: 1001;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .metadata-editor-panel.active {
+            right: 0;
+        }
+
+        .metadata-editor-header {
+            padding: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .metadata-editor-header h3 {
+            margin: 0;
+            color: #e0e0e0;
+        }
+
+        .metadata-editor-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+
+        .metadata-form {
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #e0e0e0;
+            font-size: 14px;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 8px;
+            background: rgba(66, 66, 66, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            color: #e0e0e0;
+            font-size: 14px;
+        }
+
+        .form-group textarea {
+            height: 100px;
+            resize: vertical;
+        }
+
+        .metadata-actions {
+            padding: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: #e0e0e0;
+            cursor: pointer;
+            padding: 5px;
+            font-size: 18px;
+        }
+
+        .close-btn:hover {
+            color: #ffffff;
+        }
+    </style>
+</head>
+<body>
+    <!-- Update header structure -->
+    <div class="static-header">
+        <div class="header-title">Image Gallery (IndexedDB)</div>
+        <div class="header-controls">
+            <button class="primary-btn" id="selectFolderBtn">
+                <i class="fas fa-images"></i>Select Images
+            </button>
+            <button class="primary-btn" id="addFilesBtn">
+                <i class="fas fa-plus"></i>Add Files
+            </button>
+            <button class="primary-btn" id="clearGalleryBtn">
+                <i class="fas fa-trash"></i>Clear Gallery
+            </button>
+            <button class="primary-btn" id="reloadBtn">
+                <i class="fas fa-sync"></i>Reload
+            </button>
+        </div>
+        <div class="hamburger-icon">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+    </div>
+
+    <!-- Add hamburger menu -->
+    <div class="hamburger-menu">
+        <div class="menu-section">
+            <h3>Gallery</h3>
+            <div class="menu-buttons">
+                <button id="menuSelectFolderBtn"><i class="fas fa-folder-open"></i>Select Folder</button>
+                <button id="menuAddFilesBtn"><i class="fas fa-plus"></i>Add Files</button>
+                <button id="menuClearGalleryBtn"><i class="fas fa-trash"></i>Clear Gallery</button>
+                <button id="menuReloadBtn"><i class="fas fa-sync"></i>Reload</button>
+            </div>
+        </div>
+
+        <div class="menu-section">
+            <h3>Sort & Organize</h3>
+            <div class="menu-buttons">
+                <button id="sortByNameBtn"><i class="fas fa-sort-alpha-down"></i>By Name</button>
+                <button id="sortByDateBtn"><i class="fas fa-calendar"></i>By Date</button>
+                <button id="sortBySizeBtn"><i class="fas fa-weight-hanging"></i>By Size</button>
+                <button id="restoreOrderBtn"><i class="fas fa-undo"></i>Restore Order</button>
+            </div>
+        </div>
+
+        <div class="menu-section">
+            <h3>Display</h3>
+            <div class="size-control">
+                <label for="thumbnailSize">Thumbnail Size</label>
+                <input type="range" id="thumbnailSize" min="150" max="400" value="250" step="10">
+                <span id="sizeValue">250px</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="content-wrapper">
+        <div class="gallery-grid" id="galleryGrid">
+            <!-- Images will be dynamically added here -->
+        </div>
+    </div>
+
+    <!-- Modal viewer -->
+    <div class="modal" id="imageModal">
+        <div class="modal-content">
+            <img src="" alt="Full size image" class="modal-image" id="modalImage">
+        </div>
+        <div class="modal-nav">
+            <button id="prevImageBtn"><i class="fas fa-chevron-left"></i></button>
+            <button id="nextImageBtn"><i class="fas fa-chevron-right"></i></button>
+        </div>
+        <div class="modal-controls">
+            <button class="modal-btn" id="closeModalBtn">
+                <i class="fas fa-times"></i>Close
+            </button>
+            <button class="modal-btn" id="editMetadataBtn">
+                <i class="fas fa-edit"></i>Edit Metadata
+            </button>
+            <button class="modal-btn" id="downloadImageBtn">
+                <i class="fas fa-download"></i>Download
+            </button>
+            <button class="modal-btn" id="deleteImageBtn">
+                <i class="fas fa-trash"></i>Delete
+            </button>
+        </div>
+        <div class="modal-info" id="modalInfo"></div>
+    </div>
+
+    <!-- Add metadata editor panel -->
+    <div class="metadata-editor-panel" id="metadataEditorPanel">
+        <div class="metadata-editor-header">
+            <h3>Edit PNG Metadata</h3>
+            <button class="close-btn" id="closeMetadataEditorBtn">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="metadata-editor-content">
+            <div class="metadata-form">
+                <form id="metadataForm">
+                    <div class="form-group">
+                        <label for="title">Title</label>
+                        <input type="text" id="title" name="Title" placeholder="Image Title">
+                    </div>
+                    <div class="form-group">
+                        <label for="author">Author</label>
+                        <input type="text" id="author" name="Author" placeholder="Author Name">
+                    </div>
+                    <div class="form-group">
+                        <label for="description">Description</label>
+                        <textarea id="description" name="Description" placeholder="Image Description"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="keywords">Keywords (comma-separated)</label>
+                        <input type="text" id="keywords" name="Keywords" placeholder="keyword1, keyword2, ...">
+                    </div>
+                    <div class="form-group">
+                        <label for="copyright">Copyright</label>
+                        <input type="text" id="copyright" name="Copyright" placeholder="Copyright Information">
+                    </div>
+                    <div class="form-group">
+                        <label for="software">Software</label>
+                        <input type="text" id="software" name="Software" placeholder="Software Used">
+                    </div>
+                </form>
+            </div>
+            <div class="metadata-actions">
+                <button id="saveMetadataBtn" class="primary-btn">
+                    <i class="fas fa-save"></i>Save Metadata
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+    // Add PNGMetadata class definition before the script
+    class PNGMetadata {
+        async readMetadata(blob) {
+            // For now, return empty metadata
+            return {
+                Title: '',
+                Author: '',
+                Description: '',
+                Keywords: '',
+                Copyright: '',
+                Software: ''
+            };
+        }
+
+        async writeMetadata(blob, metadata) {
+            // For now, return the original blob
+            return blob;
+        }
+    }
+
+    // Constants for IndexedDB
+    const DB_NAME = 'imageGalleryDB';
+    const DB_VERSION = 1;
+    const IMAGE_STORE_NAME = 'images';
+    
+    // File validation constants
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    const MAX_DIMENSION = 4096; // Maximum dimension for images
+
+    // Global variables
+    let db = null;
+    let currentImageIndex = -1;
+    let imageEntries = [];
+    let originalOrder = [];
+
+    // DOM Elements
+    const galleryGrid = document.getElementById('galleryGrid');
+    const selectFolderBtn = document.getElementById('selectFolderBtn');
+    const addFilesBtn = document.getElementById('addFilesBtn');
+    const clearGalleryBtn = document.getElementById('clearGalleryBtn');
+    const reloadBtn = document.getElementById('reloadBtn');
+
+    // Create file input for multiple files
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.multiple = true;
+    fileInput.style.display = 'none';
+    document.body.appendChild(fileInput);
+
+    // Create directory input for folder selection
+    const directoryInput = document.createElement('input');
+    directoryInput.type = 'file';
+    directoryInput.multiple = true;
+    directoryInput.accept = 'image/*';
+    directoryInput.style.display = 'none';
+    // Only add webkitdirectory if browser supports it
+    if ('webkitdirectory' in directoryInput) {
+        directoryInput.webkitdirectory = true;
+    }
+    document.body.appendChild(directoryInput);
+
+    // Check for directory selection support
+    const hasDirectorySupport = 'webkitdirectory' in HTMLInputElement.prototype;
+
+    // Modal elements
+    const imageModal = document.getElementById('imageModal');
+    const modalImage = document.getElementById('modalImage');
+    const modalInfo = document.getElementById('modalInfo');
+    const prevImageBtn = document.getElementById('prevImageBtn');
+    const nextImageBtn = document.getElementById('nextImageBtn');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    const downloadImageBtn = document.getElementById('downloadImageBtn');
+    const deleteImageBtn = document.getElementById('deleteImageBtn');
+
+    // Add metadata editor functionality
+    const metadataEditor = new PNGMetadata();
+    let currentEditingImage = null;
+
+    // Initialize IndexedDB
+    async function openDB() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+            request.onerror = () => {
+                const error = request.error;
+                console.error('IndexedDB error:', error);
+                showStatus(`Database error: ${error.message}`, 'error');
+                reject(error);
+            };
+
+            request.onsuccess = () => {
+                db = request.result;
+                
+                // Add error handling for database operations
+                db.onerror = (event) => {
+                    console.error('Database error:', event.target.error);
+                    showStatus('Database operation failed', 'error');
+                };
+
+                // Handle database connection closing
+                db.onclose = () => {
+                    console.warn('Database connection closed');
+                    showStatus('Database connection closed', 'info');
+                };
+
+                resolve(db);
+            };
+
+            request.onupgradeneeded = (event) => {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains(IMAGE_STORE_NAME)) {
+                    try {
+                        const store = db.createObjectStore(IMAGE_STORE_NAME, { keyPath: 'id', autoIncrement: true });
+                        store.createIndex('name', 'name', { unique: false });
+                        store.createIndex('timestamp', 'timestamp', { unique: false });
+                    } catch (error) {
+                        console.error('Error creating object store:', error);
+                        showStatus('Failed to initialize database structure', 'error');
+                    }
+                }
+            };
+        });
+    }
+
+    // Initialize the gallery
+    async function initGallery() {
+        try {
+            await openDB();
+            await loadImagesFromDB();
+            setupEventListeners();
+            updateButtonText();
+            showStatus('Gallery initialized successfully', 'success');
+        } catch (error) {
+            showStatus('Failed to initialize gallery: ' + error.message, 'error');
+            console.error('Gallery initialization error:', error);
+        }
+    }
+
+    // Handle file selection with debugging
+    async function handleFiles(files) {
+        console.log('Handling files:', files);
+        console.log('Number of files:', files.length);
+
+        if (!files || files.length === 0) {
+            console.log('No files selected');
+            showStatus('No files selected', 'error');
+            return;
+        }
+
+        try {
+            let successCount = 0;
+            let processedCount = 0;
+            const totalFiles = files.length;
+
+            showStatus(`Processing ${totalFiles} files...`, 'info');
+            console.log(`Starting to process ${totalFiles} files`);
+
+            for (const file of files) {
+                try {
+                    console.log('Processing file:', file.name, 'Type:', file.type, 'Size:', file.size);
+                    
+                    // Basic validation
+                    if (!file.type.startsWith('image/')) {
+                        console.log('Skipping non-image file:', file.name);
+                        continue;
+                    }
+
+                    // Simple file reading approach
+                    const reader = new FileReader();
+                    await new Promise((resolve, reject) => {
+                        reader.onload = async () => {
+                            try {
+                                console.log('File read successfully:', file.name);
+                                const entry = {
+                                    name: file.name,
+                                    size: formatFileSize(file.size),
+                                    type: file.type,
+                                    timestamp: new Date().toISOString(),
+                                    base64Data: reader.result
+                                };
+
+                                const transaction = db.transaction([IMAGE_STORE_NAME], 'readwrite');
+                                const store = transaction.objectStore(IMAGE_STORE_NAME);
+                                await new Promise((res, rej) => {
+                                    const request = store.add(entry);
+                                    request.onsuccess = () => {
+                                        console.log('File added to DB:', file.name);
+                                        res();
+                                    };
+                                    request.onerror = () => rej(request.error);
+                                });
+
+                                successCount++;
+                                console.log('File processed successfully:', file.name);
+                            } catch (error) {
+                                console.error('Error processing file:', file.name, error);
+                                reject(error);
+                            }
+                            resolve();
+                        };
+                        reader.onerror = () => {
+                            console.error('Error reading file:', file.name);
+                            reject(reader.error);
+                        };
+                        reader.readAsDataURL(file);
+                    });
+
+                } catch (error) {
+                    console.error(`Failed to process ${file.name}:`, error);
+                    showStatus(`Failed to process ${file.name}: ${error.message}`, 'error');
+                }
+                
+                processedCount++;
+                if (processedCount % 5 === 0 || processedCount === totalFiles) {
+                    showStatus(`Processing: ${processedCount}/${totalFiles} files`, 'info');
+                }
+            }
+            
+            if (successCount > 0) {
+                console.log(`Successfully processed ${successCount} files`);
+                await loadImagesFromDB();
+                showStatus(`Added ${successCount} image(s) successfully`, 'success');
+            } else {
+                console.log('No files were processed successfully');
+                showStatus('No valid images found', 'info');
+            }
+        } catch (error) {
+            console.error('Error in handleFiles:', error);
+            showStatus('Failed to process files: ' + error.message, 'error');
+        }
+    }
+
+    // Load images from IndexedDB with improved error handling
+    async function loadImagesFromDB() {
+        return new Promise((resolve, reject) => {
+            if (!db) {
+                const error = new Error('Database not initialized');
+                showStatus(error.message, 'error');
+                reject(error);
+                return;
+            }
+
+            const transaction = db.transaction([IMAGE_STORE_NAME], 'readonly');
+            const store = transaction.objectStore(IMAGE_STORE_NAME);
+            const request = store.getAll();
+
+            request.onsuccess = () => {
+                try {
+                    imageEntries = request.result;
+                    originalOrder = [...imageEntries];
+                    displayImages();
+                    resolve();
+                } catch (error) {
+                    console.error('Error processing loaded images:', error);
+                    showStatus('Failed to process loaded images', 'error');
+                    reject(error);
+                }
+            };
+
+            request.onerror = () => {
+                const error = request.error;
+                console.error('Error loading images:', error);
+                showStatus(`Failed to load images: ${error.message}`, 'error');
+                reject(error);
+            };
+
+            // Handle transaction completion
+            transaction.oncomplete = () => {
+                console.log('Transaction completed successfully');
+            };
+
+            transaction.onerror = (event) => {
+                console.error('Transaction error:', event.target.error);
+                showStatus('Database transaction failed', 'error');
+            };
+        });
+    }
+
+    // Display images in the gallery
+    function displayImages() {
+        galleryGrid.innerHTML = '';
+        
+        if (imageEntries.length === 0) {
+            showStatus('No images in gallery', 'info');
+            return;
+        }
+
+        imageEntries.forEach((entry, index) => {
+            const thumbnail = createThumbnail(entry, index);
+            galleryGrid.appendChild(thumbnail);
+        });
+    }
+
+    // Create thumbnail element
+    function createThumbnail(entry, index) {
+        const thumbnail = document.createElement('div');
+        thumbnail.className = 'thumbnail';
+        thumbnail.innerHTML = `
+            <img src="${entry.base64Data}" alt="${entry.name}" class="thumbnail-img">
+            <div class="thumbnail-info">
+                <div>${entry.name}</div>
+                <div>${entry.size}</div>
+            </div>
+        `;
+
+        thumbnail.addEventListener('click', () => showFullImage(index));
+        return thumbnail;
+    }
+
+    // Show full image in modal
+    function showFullImage(index) {
+        currentImageIndex = index;
+        const entry = imageEntries[index];
+        
+        modalImage.src = entry.base64Data;
+        modalInfo.textContent = `${entry.name} (${entry.size})`;
+        
+        imageModal.style.display = 'block';
+        setTimeout(() => imageModal.classList.add('show'), 10);
+        
+        updateNavigationButtons();
+    }
+
+    // Update navigation buttons state
+    function updateNavigationButtons() {
+        prevImageBtn.style.visibility = currentImageIndex > 0 ? 'visible' : 'hidden';
+        nextImageBtn.style.visibility = currentImageIndex < imageEntries.length - 1 ? 'visible' : 'hidden';
+    }
+
+    // Navigate to previous image
+    function showPreviousImage() {
+        if (currentImageIndex > 0) {
+            showFullImage(currentImageIndex - 1);
+        }
+    }
+
+    // Navigate to next image
+    function showNextImage() {
+        if (currentImageIndex < imageEntries.length - 1) {
+            showFullImage(currentImageIndex + 1);
+        }
+    }
+
+    // Close modal
+    function closeModal() {
+        imageModal.classList.remove('show');
+        setTimeout(() => {
+            imageModal.style.display = 'none';
+            modalImage.src = '';
+        }, 300);
+    }
+
+    // Download current image
+    function downloadCurrentImage() {
+        const entry = imageEntries[currentImageIndex];
+        const link = document.createElement('a');
+        link.href = entry.base64Data;
+        link.download = entry.name;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    // Delete current image
+    async function deleteCurrentImage() {
+        const entry = imageEntries[currentImageIndex];
+        
+        try {
+            await deleteImageFromDB(entry.id);
+            imageEntries.splice(currentImageIndex, 1);
+            closeModal();
+            displayImages();
+            showStatus('Image deleted successfully', 'success');
+        } catch (error) {
+            showStatus('Failed to delete image: ' + error.message, 'error');
+        }
+    }
+
+    // Delete image from IndexedDB
+    async function deleteImageFromDB(id) {
+        return new Promise((resolve, reject) => {
+            const transaction = db.transaction([IMAGE_STORE_NAME], 'readwrite');
+            const store = transaction.objectStore(IMAGE_STORE_NAME);
+            const request = store.delete(id);
+
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    // Show status message
+    function showStatus(message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        
+        const icon = document.createElement('i');
+        icon.className = type === 'error' ? 'fas fa-exclamation-circle' :
+                        type === 'success' ? 'fas fa-check-circle' :
+                        'fas fa-info-circle';
+        
+        const content = document.createElement('div');
+        content.className = 'toast-content';
+        content.textContent = message;
+        
+        toast.appendChild(icon);
+        toast.appendChild(content);
+        
+        const toastContainer = document.getElementById('toastContainer');
+        toastContainer.appendChild(toast);
+        
+        // Trigger reflow to enable transition
+        toast.offsetHeight;
+        toast.classList.add('show');
+        
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toastContainer.removeChild(toast), 300);
+        }, 3000);
+    }
+
+    // Setup event listeners
+    function setupEventListeners() {
+        console.log('Setting up event listeners...');
+
+        // File selection handling
+        const handleFileSelect = () => {
+            console.log('File select button clicked');
+            fileInput.click();
+        };
+
+        // Clear gallery handling
+        const handleClearGallery = async () => {
+            console.log('Clear gallery button clicked');
+            if (confirm('Are you sure you want to clear all images? This cannot be undone.')) {
+                try {
+                    await clearImageStore();
+                } catch (error) {
+                    console.error('Failed to clear gallery:', error);
+                    showStatus('Failed to clear gallery: ' + error.message, 'error');
+                }
+            }
+        };
+
+        // Reload handling
+        const handleReload = async () => {
+            console.log('Reload button clicked');
+            try {
+                await loadImagesFromDB();
+            } catch (error) {
+                console.error('Failed to reload gallery:', error);
+                showStatus('Failed to reload gallery: ' + error.message, 'error');
+            }
+        };
+
+        // Header buttons
+        selectFolderBtn.addEventListener('click', handleFileSelect);
+        addFilesBtn.addEventListener('click', handleFileSelect);
+        clearGalleryBtn.addEventListener('click', handleClearGallery);
+        reloadBtn.addEventListener('click', handleReload);
+
+        // Menu buttons
+        document.getElementById('menuSelectFolderBtn').addEventListener('click', handleFileSelect);
+        document.getElementById('menuAddFilesBtn').addEventListener('click', handleFileSelect);
+        document.getElementById('menuClearGalleryBtn').addEventListener('click', handleClearGallery);
+        document.getElementById('menuReloadBtn').addEventListener('click', handleReload);
+
+        // File input handling
+        fileInput.addEventListener('change', (e) => {
+            console.log('File input change event triggered');
+            const files = Array.from(e.target.files || []);
+            console.log('Selected files:', files.map(f => ({ name: f.name, type: f.type, size: f.size })));
+            handleFiles(files);
+            fileInput.value = ''; // Reset input
+        });
+
+        // Drag and drop handling
+        document.body.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            document.body.classList.add('drag-over');
+        });
+
+        document.body.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            document.body.classList.remove('drag-over');
+        });
+
+        document.body.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            document.body.classList.remove('drag-over');
+            
+            const files = Array.from(e.dataTransfer.files);
+            handleFiles(files);
+        });
+
+        // Hamburger menu toggle
+        const hamburgerIcon = document.querySelector('.hamburger-icon');
+        const hamburgerMenu = document.querySelector('.hamburger-menu');
+        
+        hamburgerIcon.addEventListener('click', () => {
+            const show = hamburgerMenu.classList.toggle('show');
+            hamburgerIcon.classList.toggle('show', show);
+            hamburgerIcon.setAttribute('aria-expanded', show);
+        });
+
+        // Close menu when clicking outside
+        document.addEventListener('click', (e) => {
+            if (hamburgerMenu.classList.contains('show') &&
+                !hamburgerMenu.contains(e.target) &&
+                !hamburgerIcon.contains(e.target)) {
+                hamburgerMenu.classList.remove('show');
+                hamburgerIcon.classList.remove('show');
+                hamburgerIcon.setAttribute('aria-expanded', 'false');
+            }
+        });
+
+        // Modal controls
+        prevImageBtn.addEventListener('click', showPreviousImage);
+        nextImageBtn.addEventListener('click', showNextImage);
+        closeModalBtn.addEventListener('click', closeModal);
+        downloadImageBtn.addEventListener('click', downloadCurrentImage);
+        deleteImageBtn.addEventListener('click', deleteCurrentImage);
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (!imageModal.classList.contains('show')) return;
+            
+            switch (e.key) {
+                case 'ArrowLeft':
+                    showPreviousImage();
+                    break;
+                case 'ArrowRight':
+                    showNextImage();
+                    break;
+                case 'Escape':
+                    closeModal();
+                    break;
+            }
+        });
+
+        // Click outside modal to close
+        imageModal.addEventListener('click', (e) => {
+            if (e.target === imageModal) {
+                closeModal();
+            }
+        });
+
+        // Sorting buttons
+        document.getElementById('sortByNameBtn').addEventListener('click', () => {
+            imageEntries.sort((a, b) => a.name.localeCompare(b.name));
+            displayImages();
+            showStatus('Gallery sorted by name', 'success');
+        });
+
+        document.getElementById('sortByDateBtn').addEventListener('click', () => {
+            imageEntries.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            displayImages();
+            showStatus('Gallery sorted by date', 'success');
+        });
+
+        document.getElementById('sortBySizeBtn').addEventListener('click', () => {
+            imageEntries.sort((a, b) => {
+                const sizeA = parseFloat(a.size);
+                const sizeB = parseFloat(b.size);
+                return sizeB - sizeA;
+            });
+            displayImages();
+            showStatus('Gallery sorted by size', 'success');
+        });
+
+        document.getElementById('restoreOrderBtn').addEventListener('click', () => {
+            imageEntries = [...originalOrder];
+            displayImages();
+            showStatus('Original order restored', 'success');
+        });
+
+        // Thumbnail size control
+        const thumbnailSize = document.getElementById('thumbnailSize');
+        const sizeValue = document.getElementById('sizeValue');
+
+        thumbnailSize.addEventListener('input', (e) => {
+            const size = e.target.value;
+            document.documentElement.style.setProperty('--thumbnail-size', `${size}px`);
+            sizeValue.textContent = `${size}px`;
+            localStorage.setItem('thumbnailSize', size);
+        });
+
+        // Load saved thumbnail size
+        const savedSize = localStorage.getItem('thumbnailSize') || '250';
+        thumbnailSize.value = savedSize;
+        document.documentElement.style.setProperty('--thumbnail-size', `${savedSize}px`);
+        sizeValue.textContent = `${savedSize}px`;
+
+        // Initialize metadata editor
+        initMetadataEditor();
+
+        console.log('Event listeners setup complete');
+    }
+
+    // Clear image store with improved error handling
+    async function clearImageStore() {
+        try {
+            if (!db) {
+                throw new Error('Database not initialized');
+            }
+
+            const transaction = db.transaction([IMAGE_STORE_NAME], 'readwrite');
+            const store = transaction.objectStore(IMAGE_STORE_NAME);
+            
+            await new Promise((resolve, reject) => {
+                const request = store.clear();
+                
+                request.onsuccess = () => {
+                    console.log('Image store cleared successfully');
+                    imageEntries = [];
+                    originalOrder = [];
+                    displayImages();
+                    showStatus('Gallery cleared successfully', 'success');
+                    resolve();
+                };
+
+                request.onerror = () => {
+                    console.error('Error clearing image store:', request.error);
+                    reject(request.error);
+                };
+            });
+
+        } catch (error) {
+            console.error('Error in clearImageStore:', error);
+            showStatus('Failed to clear gallery: ' + error.message, 'error');
+            throw error;
+        }
+    }
+
+    // Format file size
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    // Update button text to reflect actual functionality
+    function updateButtonText() {
+        selectFolderBtn.innerHTML = '<i class="fas fa-images"></i>Select Images';
+        document.getElementById('menuSelectFolderBtn').innerHTML = '<i class="fas fa-images"></i>Select Images';
+    }
+
+    // Initialize metadata editor
+    function initMetadataEditor() {
+        const metadataPanel = document.getElementById('metadataEditorPanel');
+        const closeBtn = document.getElementById('closeMetadataEditorBtn');
+        const editMetadataBtn = document.getElementById('editMetadataBtn');
+        const saveMetadataBtn = document.getElementById('saveMetadataBtn');
+        const metadataForm = document.getElementById('metadataForm');
+
+        // Close panel
+        closeBtn.onclick = () => {
+            metadataPanel.classList.remove('active');
+        };
+
+        // Edit metadata button
+        editMetadataBtn.onclick = async () => {
+            if (!currentImageIndex >= 0) return;
+            
+            const entry = imageEntries[currentImageIndex];
+            currentEditingImage = entry;
+            
+            try {
+                // Read metadata from the image
+                const metadata = await metadataEditor.readMetadata(new Blob([entry.base64Data]));
+                populateMetadataForm(metadata);
+                metadataPanel.classList.add('active');
+            } catch (error) {
+                console.error('Error reading metadata:', error);
+                showStatus('Failed to read image metadata', 'error');
+            }
+        };
+
+        // Save metadata
+        saveMetadataBtn.onclick = async () => {
+            if (!currentEditingImage) return;
+
+            try {
+                const metadata = collectMetadata();
+                const updatedImage = await metadataEditor.writeMetadata(
+                    new Blob([currentEditingImage.base64Data]),
+                    metadata
+                );
+
+                // Update the image in the gallery
+                currentEditingImage.base64Data = await blobToBase64(updatedImage);
+                displayImages();
+                showStatus('Metadata updated successfully', 'success');
+                metadataPanel.classList.remove('active');
+            } catch (error) {
+                console.error('Error saving metadata:', error);
+                showStatus('Failed to save metadata', 'error');
+            }
+        };
+    }
+
+    // Populate metadata form
+    function populateMetadataForm(metadata) {
+        const inputs = metadataForm.querySelectorAll('input, textarea');
+        inputs.forEach(input => {
+            if (input.name) {
+                input.value = metadata[input.name] || '';
+            }
+        });
+    }
+
+    // Collect metadata from form
+    function collectMetadata() {
+        const metadata = {};
+        const inputs = metadataForm.querySelectorAll('input, textarea');
+        inputs.forEach(input => {
+            if (input.name && input.value.trim()) {
+                metadata[input.name] = input.value.trim();
+            }
+        });
+        return metadata;
+    }
+
+    // Helper function to convert blob to base64
+    function blobToBase64(blob) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    }
+
+    // Initialize gallery when page loads
+    window.addEventListener('load', () => {
+        initGallery();
+        initMetadataEditor();
+    });
+
+    // Add CSS variable for thumbnail size
+    document.documentElement.style.setProperty('--thumbnail-size', '250px');
+    </script>
+</body>
+</html> 

@@ -200,160 +200,132 @@ class PNGMetadata {
     analyzeChunks(buffer) {
         const view = new DataView(buffer);
         const chunks = [];
+        let offset = 8; // Skip PNG signature
         let idatIndex = -1;
         
-        // Skip PNG signature (8 bytes)
-        let offset = 8;
-        
-        let index = 0;
         while (offset < view.byteLength) {
-            const chunkStart = offset;
-            
-            // Read chunk length
             const length = view.getUint32(offset, false);
-            offset += 4;
-            
-            // Read chunk type
-            const typeBytes = new Uint8Array(buffer, offset, 4);
+            const typeBytes = new Uint8Array(buffer, offset + 4, 4);
             const type = this.decoder.decode(typeBytes);
-            offset += 4;
-            
-            // Skip data
-            offset += length;
-            
-            // Skip CRC
-            offset += 4;
             
             chunks.push({
-                index,
-                type,
-                offset: chunkStart,
-                length: offset - chunkStart
+                offset: offset,
+                length: length + 12, // Include length (4) + type (4) + data (length) + CRC (4)
+                type: type
             });
             
             if (type === 'IDAT' && idatIndex === -1) {
-                idatIndex = index;
+                idatIndex = chunks.length - 1;
             }
             
-            // IEND chunk means end of PNG
-            if (type === 'IEND') {
-                break;
-            }
-            
-            index++;
+            offset += length + 12; // Move to next chunk
         }
         
         return { chunks, idatIndex };
     }
 
     /**
-     * Create a tEXt chunk from key and value
+     * Create a tEXt chunk for metadata
      * @param {string} key - Metadata key
      * @param {string} value - Metadata value
-     * @returns {Uint8Array} - tEXt chunk
+     * @returns {Uint8Array} - tEXt chunk bytes
      */
     createTextChunk(key, value) {
         // Encode key and value
         const keyBytes = this.encoder.encode(key);
         const valueBytes = this.encoder.encode(value);
         
-        // Length of data (key + null separator + value)
+        // Calculate chunk length (key + null separator + value)
         const length = keyBytes.length + 1 + valueBytes.length;
         
-        // Create buffer for chunk (length + type + data + CRC)
-        const chunk = new Uint8Array(4 + 4 + length + 4);
+        // Create chunk data
+        const chunk = new Uint8Array(length + 12); // length(4) + type(4) + data(length) + CRC(4)
         const view = new DataView(chunk.buffer);
         
         // Write length
         view.setUint32(0, length, false);
         
         // Write type ('tEXt')
-        chunk[4] = 116; // t
-        chunk[5] = 69;  // E
-        chunk[6] = 88;  // X
-        chunk[7] = 116; // t
-        
-        // Write data
-        let offset = 8;
+        const typeBytes = this.encoder.encode('tEXt');
+        chunk.set(typeBytes, 4);
         
         // Write key
-        chunk.set(keyBytes, offset);
-        offset += keyBytes.length;
+        chunk.set(keyBytes, 8);
         
         // Write null separator
-        chunk[offset] = 0;
-        offset += 1;
+        chunk[8 + keyBytes.length] = 0;
         
         // Write value
-        chunk.set(valueBytes, offset);
-        offset += valueBytes.length;
+        chunk.set(valueBytes, 8 + keyBytes.length + 1);
         
         // Calculate and write CRC
-        const crc = this.calculateCRC(chunk.subarray(4, 8 + length));
+        const crcData = new Uint8Array(4 + length);
+        crcData.set(typeBytes);
+        crcData.set(chunk.subarray(8, 8 + length), 4);
+        const crc = this.calculateCRC(crcData);
         view.setUint32(8 + length, crc, false);
         
         return chunk;
     }
 
     /**
-     * Check if buffer is a valid PNG
+     * Check if buffer is a valid PNG file
      * @param {DataView} view - DataView of the buffer
-     * @returns {boolean} - true if valid PNG
+     * @returns {boolean} - True if valid PNG
      */
     isPNG(view) {
-        if (view.byteLength < 8) return false;
+        const PNG_SIGNATURE = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
         
-        return (
-            view.getUint8(0) === 137 &&
-            view.getUint8(1) === 80 &&
-            view.getUint8(2) === 78 &&
-            view.getUint8(3) === 71 &&
-            view.getUint8(4) === 13 &&
-            view.getUint8(5) === 10 &&
-            view.getUint8(6) === 26 &&
-            view.getUint8(7) === 10
-        );
+        if (view.byteLength < PNG_SIGNATURE.length) {
+            return false;
+        }
+        
+        for (let i = 0; i < PNG_SIGNATURE.length; i++) {
+            if (view.getUint8(i) !== PNG_SIGNATURE[i]) {
+                return false;
+            }
+        }
+        
+        return true;
     }
 
     /**
-     * Calculate CRC for chunk
-     * @param {Uint8Array} data - Chunk data (type + data)
-     * @returns {number} - CRC value
+     * Calculate CRC32 for chunk
+     * @param {Uint8Array} data - Data to calculate CRC for
+     * @returns {number} - CRC32 value
      */
     calculateCRC(data) {
-        let crc = -1;
+        let crc = 0xffffffff;
         const crcTable = this.getCRCTable();
         
         for (let i = 0; i < data.length; i++) {
-            crc = crcTable[(crc ^ data[i]) & 0xff] ^ ((crc >> 8) & 0x00ffffff);
+            crc = crcTable[(crc ^ data[i]) & 0xff] ^ (crc >>> 8);
         }
         
-        return crc ^ -1;
+        return crc ^ 0xffffffff;
     }
 
     /**
-     * Get CRC table for PNG chunks
-     * @returns {Uint32Array} - CRC table
+     * Get CRC32 lookup table
+     * @returns {Uint32Array} - CRC32 table
      */
     getCRCTable() {
-        if (this.crcTable) return this.crcTable;
-        
-        this.crcTable = new Uint32Array(256);
+        const table = new Uint32Array(256);
         
         for (let i = 0; i < 256; i++) {
             let c = i;
             for (let j = 0; j < 8; j++) {
-                c = ((c & 1) ? 0xedb88320 ^ (c >>> 1) : c >>> 1);
+                c = ((c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1));
             }
-            this.crcTable[i] = c;
+            table[i] = c;
         }
         
-        return this.crcTable;
+        return table;
     }
 
     /**
-     * Get common PNG metadata keys
-     * @returns {Array} - Array of common metadata keys
+     * Get common metadata keys
+     * @returns {string[]} - Array of common metadata keys
      */
     getCommonKeys() {
         return [

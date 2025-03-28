@@ -1543,15 +1543,15 @@
         // --- Image Loading & Processing ---
 
         async function processAndAddFiles(files, sourceDescription = "files") {
-            let addedCount = 0;
+                let addedCount = 0;
             let skippedSizeCount = 0;
             let skippedTypeCount = 0;
             let compressionCount = 0;
             const originalLength = imageEntries.length;
 
             showStatus(`Processing ${files.length} ${sourceDescription}...`, "info");
-
-            for (const file of files) {
+                
+                for (const file of files) {
                 if (!file.type.startsWith('image/')) {
                     skippedTypeCount++;
                     continue;
@@ -1586,18 +1586,18 @@
                     }
 
                     const metadata = await extractMetadata(file, fileType, fileSize);
-
-                    // Add to our entries
-                    imageEntries.push({
+                        
+                        // Add to our entries
+                        imageEntries.push({
                         handle: { // Store minimal handle info for potential future use/identification
-                            name: file.name,
+                                name: file.name,
                             size: file.size, // Original size
-                            lastModified: file.lastModified
-                        },
-                        base64Data: base64Data,
-                        metadata: metadata
-                    });
-                    addedCount++;
+                                lastModified: file.lastModified
+                            },
+                            base64Data: base64Data,
+                            metadata: metadata
+                        });
+                        addedCount++;
 
                     // Try to save incrementally, stop if storage limit is hit
                     if (!(await saveImageEntriesSafely())) {
@@ -1618,8 +1618,8 @@
                  originalImageOrder = [...imageEntries]; // Rebuild original order after additions/failures
              }
 
-            refreshGallery();
-            updateTagsList();
+                refreshGallery();
+                updateTagsList();
 
             // --- Report results ---
             let messageParts = [];
@@ -1690,27 +1690,27 @@
                 return 0; // Return count
              }
 
-             // Create container for thumbnails
-             const thumbnailsContainer = document.createElement('div');
-             thumbnailsContainer.className = 'thumbnails-container';
-             gallery.appendChild(thumbnailsContainer);
+            // Create container for thumbnails
+            const thumbnailsContainer = document.createElement('div');
+            thumbnailsContainer.className = 'thumbnails-container';
+            gallery.appendChild(thumbnailsContainer);
 
-             // Load initial page
-             loadThumbnailsPage(filteredEntries, 1);
+            // Load initial page
+            loadThumbnailsPage(filteredEntries, 1);
 
              // Add scroll event listener for infinite scroll ONLY if there are more pages potentially
              if (filteredEntries.length > ITEMS_PER_PAGE) {
                   hasMore = true;
                   currentScrollHandler = debounce(() => {
-                     if (isLoading || !hasMore) return;
-
-                     const scrollPosition = window.innerHeight + window.scrollY;
+                if (isLoading || !hasMore) return;
+                
+                const scrollPosition = window.innerHeight + window.scrollY;
                      const triggerPoint = document.body.offsetHeight - window.innerHeight * 1.5; // Load when 1.5 screens away from bottom
-
+                
                      if (scrollPosition >= triggerPoint) {
-                          currentPage++;
-                          loadThumbnailsPage(filteredEntries, currentPage);
-                     }
+                    currentPage++;
+                    loadThumbnailsPage(filteredEntries, currentPage);
+                }
                   }, DEBOUNCE_TIME_SCROLL);
                   window.addEventListener('scroll', currentScrollHandler, { passive: true }); // Use passive listener
              } else {
@@ -1776,7 +1776,7 @@
              await Promise.all(pageEntries.map(async (entry, indexInPage) => {
                  const globalIndex = startIndex + indexInPage; // Get index relative to the full filtered list
                  const thumbnail = await createThumbnail(entry, globalIndex); // Pass index
-                 fragment.appendChild(thumbnail);
+                fragment.appendChild(thumbnail);
              }));
 
 
@@ -1791,17 +1791,17 @@
             const thumbnail = document.createElement('div');
             thumbnail.className = 'thumbnail visible'; // Start visible
             thumbnail.dataset.index = index; // Store index for click handler
-
+            
             const img = document.createElement('img');
             img.className = 'thumbnail-img';
             img.loading = 'lazy'; // Enable native lazy loading
             img.alt = entry.metadata?.Name || 'Image thumbnail'; // Add alt text
-
+            
             // Placeholder
             const placeholder = document.createElement('div');
             placeholder.className = 'thumbnail-placeholder';
             thumbnail.appendChild(placeholder);
-
+            
              // Set background image for perceived faster loading (optional)
              // thumbnail.style.backgroundImage = `url(${entry.base64Data || entry.objectUrl || ''})`;
              // thumbnail.style.backgroundSize = 'contain';
@@ -1819,7 +1819,7 @@
                      img.onload = () => {
                          // Replace placeholder only after image is loaded
                          if (thumbnail.contains(placeholder)) {
-                             thumbnail.replaceChild(img, placeholder);
+                    thumbnail.replaceChild(img, placeholder);
                          }
                      };
                      img.onerror = () => {
@@ -1830,7 +1830,7 @@
                              thumbnail.appendChild(placeholder);
                          }
                      };
-                 } else {
+                } else {
                      console.warn('No image source found for thumbnail:', entry.metadata?.Name);
                      placeholder.textContent = 'No Image Data';
                  }
@@ -1851,7 +1851,7 @@
             selectBtn.textContent = 'Select';
             selectBtn.setAttribute('aria-label', `Select ${entry.metadata?.Name || 'image'}`);
             selectBtn.onclick = (e) => {
-                e.stopPropagation();
+                        e.stopPropagation();
                 toggleThumbnailSelection(thumbnail, selectBtn);
             };
             thumbnail.appendChild(selectBtn);
@@ -1869,7 +1869,7 @@
                      // Need to ensure showFullImage uses the correct list.
                      // Let's pass the actual entry object instead of index.
                     showFullImage(entry);
-                 } else {
+                        } else {
                      console.error("Could not find thumbnail index for modal.");
                  }
              };
@@ -2089,8 +2089,8 @@
              // imageCache.clear();
 
              activeModalIndex = -1;
-
-             setTimeout(() => {
+                
+                setTimeout(() => {
                  imageModal.style.display = "none";
                  modalImage.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'; // Clear src
                  imageModal.style.backgroundImage = ''; // Clear background
@@ -2104,16 +2104,16 @@
         async function extractImageColors(img) {
             return new Promise((resolve, reject) => {
                 try {
-                    const canvas = document.createElement('canvas');
-                    const ctx = canvas.getContext('2d');
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
                     const size = Math.min(img.naturalWidth, img.naturalHeight, 100); // Analyze smaller dimension up to 100px
                     canvas.width = size;
                     canvas.height = size;
-
-                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                    const data = imageData.data;
-                    const colorCounts = {};
+                
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const data = imageData.data;
+                const colorCounts = {};
                     const step = 4 * 4; // Sample every 4th pixel (RGBA * 4)
 
                     for (let i = 0; i < data.length; i += step) {
@@ -2123,11 +2123,11 @@
                         const g = (data[i + 1] >> 4) << 4;
                         const b = (data[i + 2] >> 4) << 4;
                         const color = `${r},${g},${b}`; // Use comma separated for easier keying
-                        colorCounts[color] = (colorCounts[color] || 0) + 1;
-                    }
-
-                    const sortedColors = Object.entries(colorCounts)
-                        .sort(([, a], [, b]) => b - a)
+                    colorCounts[color] = (colorCounts[color] || 0) + 1;
+                }
+                
+                const sortedColors = Object.entries(colorCounts)
+                    .sort(([, a], [, b]) => b - a)
                         .slice(0, 5) // Get top 5 quantized colors
                         .map(([rgbString]) => {
                              const [r, g, b] = rgbString.split(',');
@@ -2136,7 +2136,7 @@
 
 
                     // Ensure at least 3 colors, fallback to black/gray/white
-                    while (sortedColors.length < 3) {
+                while (sortedColors.length < 3) {
                          if (!sortedColors.includes('#000000')) sortedColors.push('#000000');
                          else if (!sortedColors.includes('#808080')) sortedColors.push('#808080');
                          else sortedColors.push('#ffffff');
@@ -2155,7 +2155,7 @@
             tagsList.innerHTML = '';
             const keywordMap = new Map();
             const activeTags = JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIVE_TAGS) || '[]');
-
+            
             imageEntries.forEach(entry => {
                 const keywords = entry.metadata?.Keywords;
                 if (keywords && typeof keywords === 'string') {
@@ -2167,13 +2167,13 @@
                     });
                 }
             });
-
+            
             const sortedKeywords = Array.from(keywordMap.entries())
                 .sort(([, a], [, b]) => b - a) // Sort by count desc
                 .map(([keyword]) => keyword);
-
+            
             tagsCount.textContent = `${sortedKeywords.length} unique`;
-
+            
             sortedKeywords.forEach(keyword => {
                 const count = keywordMap.get(keyword);
                 const tag = document.createElement('button'); // Use button for semantics
@@ -2208,7 +2208,7 @@
                  newActiveState = false;
                  newActiveTags = currentActiveTags.filter(t => t !== keyword);
                  newSearchTerms = currentSearch.filter(term => term.toLowerCase() !== keyword.toLowerCase());
-             } else {
+                    } else {
                  // Activate tag
                  newActiveState = true;
                  newActiveTags = [...currentActiveTags, keyword];
@@ -2240,7 +2240,7 @@
             const selectedThumbnails = gallery.querySelectorAll('.thumbnail.selected');
             const selectedCount = selectedThumbnails.length;
             const existingToast = toastContainer.querySelector('.toast.unselect-toast');
-
+            
             if (selectedCount > 0) {
                 if (!existingToast) {
                     const toast = document.createElement('div');
@@ -2256,7 +2256,7 @@
                         </div>
                     `;
                     toastContainer.appendChild(toast);
-
+                    
                     // Add listeners after appending
                      toast.querySelector('#unselectAllBtn').onclick = unselectAllImages;
                      toast.querySelector('#removeSelectedBtn').onclick = removeSelectedImages;
@@ -2284,9 +2284,9 @@
         function removeSelectedImages() {
             const selectedThumbnails = Array.from(gallery.querySelectorAll('.thumbnail.selected'));
             const selectedCount = selectedThumbnails.length;
-
+            
             if (selectedCount === 0) return;
-
+            
              // Get the actual entry objects to remove based on their original index in imageEntries
              // This requires mapping the currently displayed index back or storing the original index
              const indicesToRemove = new Set();
@@ -2305,9 +2305,9 @@
 
              if (indicesToRemove.size === 0) {
                  showStatus("Could not identify images to remove.", "warning");
-                 return;
-             }
-
+                return;
+            }
+            
 
             // Sort indices descending to avoid shifting issues during splice
              const sortedIndices = Array.from(indicesToRemove).sort((a, b) => b - a);
@@ -2389,7 +2389,7 @@
                  deactivateAllSorts();
                  refreshGallery(searchTerms); // Refresh with original order
                  showStatus("Gallery order restored", "info");
-             } else {
+                    } else {
                  // Activate this sort
                  deactivateAllSorts();
                  sortButton.classList.add('active');
@@ -2430,7 +2430,7 @@
 
 
                  // Sort based on color analysis
-                 const colorOrder = ['red', 'orange', 'yellow', 'green', 'blue', 'indigo', 'violet', 'grayscale'];
+                const colorOrder = ['red', 'orange', 'yellow', 'green', 'blue', 'indigo', 'violet', 'grayscale'];
                  colorSortData.sort((a, b) => {
                       const categoryIndexA = colorOrder.indexOf(a.category);
                       const categoryIndexB = colorOrder.indexOf(b.category);
@@ -2472,12 +2472,12 @@
                   }
 
 
-                 organizeByColorBtn.classList.add('active');
-                 showStatus("Gallery organized by rainbow colors", "success");
+                organizeByColorBtn.classList.add('active');
+                showStatus("Gallery organized by rainbow colors", "success");
 
-             } catch (error) {
-                 showStatus("Error organizing by color: " + error.message, "error");
-                 console.error(error);
+            } catch (error) {
+                showStatus("Error organizing by color: " + error.message, "error");
+                console.error(error);
                  organizeByColorBtn.classList.remove('active'); // Ensure button is not active on error
              }
          }
@@ -2564,9 +2564,9 @@
 
              if (!isLikelyImage) {
                  showStatus("File does not appear to be a convertible image.", "warning");
-                 return;
-             }
-
+                return;
+            }
+            
              pendingConversion = { imageUrl, filename };
              metaTitleInput.value = '';
              metaAuthorInput.value = '';
@@ -2813,8 +2813,8 @@
                              }
                          }
                      }));
-                    originalImageOrder = [...imageEntries];
-                    refreshGallery();
+                originalImageOrder = [...imageEntries];
+                refreshGallery();
                     updateTagsList(); // Update tags after loading
                 } catch (e) {
                     console.error("Failed to parse saved image entries:", e);
