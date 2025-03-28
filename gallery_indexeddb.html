@@ -7,22 +7,6 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖼️</text></svg>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <!-- Load PNG libraries from local files -->
-    <script>
-        // Pre-load the PNG chunk text library
-        window.pngChunkTextPromise = new Promise((resolve, reject) => {
-            const script = document.createElement('script');
-            script.src = 'js/png-chunk-text.min.js';
-            script.onload = () => {
-                if (window.pngChunkText) {
-                    resolve(window.pngChunkText);
-                } else {
-                    reject(new Error('PNG chunk text library failed to load properly'));
-                }
-            };
-            script.onerror = () => reject(new Error('Failed to load PNG chunk text library'));
-            document.head.appendChild(script);
-        });
-    </script>
     <style>
         * {
             box-sizing: border-box;
@@ -946,79 +930,114 @@
     <div class="toast-container" id="toastContainer"></div>
 
     <script>
-    // Add script loading function at the start
-    async function loadPNGChunkText() {
-        return new Promise((resolve, reject) => {
-            // Check if already loaded
-            if (window.pngChunkText) {
-                resolve(window.pngChunkText);
-                return;
-            }
-
-            // Create and load script
-            const script = document.createElement('script');
-            script.src = 'js/png-chunk-text.min.js';
-            script.onload = () => {
-                if (window.pngChunkText) {
-                    resolve(window.pngChunkText);
-                } else {
-                    reject(new Error('PNG chunk text library failed to load properly'));
-                }
-            };
-            script.onerror = () => reject(new Error('Failed to load PNG chunk text library'));
-            document.head.appendChild(script);
-        });
-    }
-
-    // Modify PNGMetadata class
+    // Modify PNGMetadata class to use tEXt-parser
     class PNGMetadata {
         constructor() {
-            this.libraryPromise = window.pngChunkTextPromise;
+            console.log('PNGMetadata constructor called (using tEXt-parser).');
+            // Use a promise to ensure the library loads before use
+            this.libraryPromise = new Promise((resolve, reject) => {
+                // Check if library is already loaded
+                if (window.tEXt) {
+                    console.log('tEXt-parser library already loaded.');
+                    resolve(window.tEXt);
+                    return;
+                }
+                console.log('Attempting to load tEXt-parser library...');
+                // Dynamically load the library script
+                const script = document.createElement('script');
+                script.src = 'js/tEXt-parser.js'; // Path to the new library
+                script.onload = () => {
+                    console.log('tEXt-parser script onload event fired. window.tEXt:', window.tEXt);
+                    if (window.tEXt && typeof window.tEXt.decode === 'function' && typeof window.tEXt.encode === 'function') {
+                        console.log('tEXt-parser library loaded successfully.');
+                        resolve(window.tEXt);
+                    } else {
+                        console.error('tEXt-parser script loaded, but window.tEXt or its methods are invalid.');
+                        reject(new Error('tEXt-parser library failed to initialize properly'));
+                    }
+                };
+                script.onerror = (err) => {
+                    console.error('Failed to load tEXt-parser library script:', err);
+                    reject(new Error('Failed to load tEXt-parser library script'));
+                };
+                document.head.appendChild(script);
+            });
         }
 
         async ensureLibraryLoaded() {
+            console.log('ensureLibraryLoaded (tEXt-parser) called. Waiting for libraryPromise...');
             try {
                 await this.libraryPromise;
+                console.log('libraryPromise (tEXt-parser) resolved. window.tEXt:', window.tEXt);
                 return true;
             } catch (error) {
-                console.error('Failed to load PNG chunk text library:', error);
+                console.error('Failed to load tEXt-parser library:', error);
+                showStatus('PNG Library (tEXt-parser) failed to load. Metadata operations unavailable.', 'error');
                 return false;
             }
         }
 
         async readMetadata(blob) {
+            console.log('readMetadata (tEXt-parser) called for:', blob.name);
             if (!await this.ensureLibraryLoaded()) {
-                throw new Error('PNG metadata library failed to load. Please refresh the page.');
+                throw new Error('tEXt-parser library failed to load.');
             }
 
             if (blob.type !== 'image/png') {
                 console.warn('Attempted to read metadata from non-PNG file:', blob.name);
-                return {}; // Only support reading PNG metadata
+                return {};
             }
 
             try {
                 const buffer = await blob.arrayBuffer();
-                const chunks = window.pngChunkText.default.decode(buffer);
-                const metadata = {};
-                chunks.forEach(chunk => {
-                    metadata[chunk.keyword] = chunk.text;
-                });
-                console.log('Decoded PNG metadata:', metadata);
+                // tEXt.decode expects Uint8Array or Buffer, ArrayBuffer should be okay per docs/source
+                console.log('Calling tEXt.decode...');
+                const metadata = window.tEXt.decode(buffer);
+                console.log('Decoded PNG metadata (tEXt-parser):', metadata);
+                // The library directly returns an object { keyword: text, ... }
                 return metadata;
             } catch (error) {
-                console.error('Error reading PNG metadata:', error);
+                console.error('Error reading PNG metadata (tEXt-parser):', error);
                 showStatus('Failed to read PNG metadata: ' + error.message, 'error');
-                return {}; // Return empty object on error
+                return {};
             }
         }
 
-        async writeMetadata(blob, metadata) {
+        async writeMetadata(blob, metadataToWrite) {
+            console.log('writeMetadata (tEXt-parser) called for:', blob.name);
             if (!await this.ensureLibraryLoaded()) {
-                throw new Error('PNG metadata library failed to load. Please refresh the page.');
+                throw new Error('tEXt-parser library failed to load.');
             }
 
-            // For now, return the original blob
-            return blob;
+            if (blob.type !== 'image/png') {
+                console.warn('Attempted to write metadata to non-PNG file:', blob.name);
+                return blob;
+            }
+
+            try {
+                const buffer = await blob.arrayBuffer();
+                // Prepare metadata object, removing empty values
+                const cleanedMetadata = {};
+                for (const key in metadataToWrite) {
+                    if (metadataToWrite[key] && metadataToWrite[key].trim() !== '') {
+                        cleanedMetadata[key] = metadataToWrite[key].trim();
+                    }
+                }
+
+                console.log('Calling tEXt.encode with metadata:', cleanedMetadata);
+                // tEXt.encode takes the metadata object and the original buffer (Uint8Array/Buffer)
+                // It returns a new Uint8Array buffer
+                const newBuffer = window.tEXt.encode(cleanedMetadata, buffer);
+
+                console.log('Encoded new PNG data (tEXt-parser).');
+                // Return a new Blob with the updated data
+                return new Blob([newBuffer], { type: 'image/png' });
+
+            } catch (error) {
+                console.error('Error writing PNG metadata (tEXt-parser):', error);
+                showStatus('Failed to write PNG metadata: ' + error.message, 'error');
+                return blob; // Return original blob on error
+            }
         }
     }
 
@@ -1077,10 +1096,6 @@
     const closeModalBtn = document.getElementById('closeModalBtn');
     const downloadImageBtn = document.getElementById('downloadImageBtn');
     const deleteImageBtn = document.getElementById('deleteImageBtn');
-
-    // Add metadata editor functionality
-    const metadataEditor = new PNGMetadata();
-    let currentEditingImage = null;
 
     // Add PNG Editor functionality
     let currentEditorFile = null;
@@ -1740,67 +1755,46 @@
         document.getElementById('menuSelectFolderBtn').innerHTML = '<i class="fas fa-images"></i>Select Images';
     }
 
-    // Initialize metadata editor
+    // Initialize metadata editor related event listeners
     function initMetadataEditor() {
-        const metadataPanel = document.getElementById('metadataEditorPanel');
-        const closeBtn = document.getElementById('closeMetadataEditorBtn');
+        // Only need the button that triggers the editor load
         const editMetadataBtn = document.getElementById('editMetadataBtn');
-        const saveMetadataBtn = document.getElementById('saveMetadataBtn');
-        const metadataForm = document.getElementById('metadataForm');
 
-        // Close panel
-        // closeBtn.onclick = () => { // <--- This line likely causes the error
-        //     metadataPanel.classList.remove('active');
-        // };
-
-        // Edit metadata button
+        // Edit metadata button (in modal) - Triggers loading image into main editor panel
         editMetadataBtn.onclick = async () => {
-            if (currentImageIndex < 0) return; // Ensure index is valid
+            if (currentImageIndex < 0 || currentImageIndex >= imageEntries.length) {
+                 console.error('Invalid currentImageIndex for editing:', currentImageIndex);
+                 showStatus('Cannot edit metadata: Invalid image selected.', 'error');
+                 return;
+            }
             const entry = imageEntries[currentImageIndex];
-            
+
             try {
                 showStatus('Loading image into editor...', 'info');
-                
-                // Convert Data URL to File object
+
+                // Convert Data URL to Blob/File object
                 const response = await fetch(entry.base64Data);
                 if (!response.ok) {
                     throw new Error(`Failed to fetch image data (status: ${response.status})`);
                 }
                 const blob = await response.blob();
-                const file = new File([blob], entry.name, { type: blob.type });
+                // Use a default name if entry.name is missing, though it shouldn't be
+                const fileName = entry.name || 'image.png';
+                const file = new File([blob], fileName, { type: blob.type || 'image/png' });
 
                 // Load into the main editor panel (this function also opens the panel)
                 await loadImageIntoEditor(file);
-                
-                // Close the modal view
-                closeModal(); 
+
+                // Close the modal view after successfully initiating load
+                closeModal();
             } catch (error) {
                 console.error('Error preparing image for editor:', error);
                 showStatus(`Failed to load image into editor: ${error.message}`, 'error');
             }
         };
 
-        // Save metadata
-        // saveMetadataBtn.onclick = async () => {
-        //     if (!currentEditingImage) return;
-        //
-        //     try {
-        //         const metadata = collectMetadata();
-        //         const updatedImage = await metadataEditor.writeMetadata(
-        //             new Blob([currentEditingImage.base64Data]),
-        //             metadata
-        //         );
-
-        //         // Update the image in the gallery
-        //         currentEditingImage.base64Data = await blobToBase64(updatedImage);
-        //         displayImages();
-        //         showStatus('Metadata updated successfully', 'success');
-        //         metadataPanel.classList.remove('active');
-        //     } catch (error) {
-        //         console.error('Error saving metadata:', error);
-        //         showStatus('Failed to save metadata', 'error');
-        //     }
-        // };
+        // Other variables/event listeners previously here (related to a separate metadata panel) are removed
+        // as the logic is now consolidated within the main PNG Editor panel.
     }
 
     // Populate metadata form
@@ -2064,7 +2058,6 @@
     // Initialize gallery when page loads
     document.addEventListener('DOMContentLoaded', () => {
         initGallery();
-        initMetadataEditor();
     });
 
     // Add CSS variable for thumbnail size
