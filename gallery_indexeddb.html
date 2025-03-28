@@ -6,6 +6,23 @@
     <title>Image Gallery (IndexedDB)</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖼️</text></svg>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Load PNG libraries from local files -->
+    <script>
+        // Pre-load the PNG chunk text library
+        window.pngChunkTextPromise = new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'js/png-chunk-text.min.js';
+            script.onload = () => {
+                if (window.pngChunkText) {
+                    resolve(window.pngChunkText);
+                } else {
+                    reject(new Error('PNG chunk text library failed to load properly'));
+                }
+            };
+            script.onerror = () => reject(new Error('Failed to load PNG chunk text library'));
+            document.head.appendChild(script);
+        });
+    </script>
     <style>
         * {
             box-sizing: border-box;
@@ -251,6 +268,11 @@
             border-radius: 12px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
             border: 1px solid rgba(255, 255, 255, 0.1);
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            padding: 10px;
+            bottom: 10px;
         }
 
         .modal-btn {
@@ -686,6 +708,73 @@
         .close-btn:hover {
             color: #ffffff;
         }
+
+        .sliding-container {
+            position: fixed;
+            top: 0;
+            right: -100%;
+            width: 80%;
+            height: 100vh;
+            background: rgba(26, 26, 26, 0.95);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            transition: right 0.3s ease;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            box-shadow: -4px 0 20px rgba(0, 0, 0, 0.3);
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .sliding-container.active {
+            right: 0;
+        }
+
+        .editor-panel {
+            display: flex;
+            gap: 30px;
+            padding: 20px;
+            height: calc(100vh - 60px);
+            overflow-y: auto;
+        }
+
+        .image-preview {
+            flex: 2;
+            background: rgba(26, 26, 26, 0.6);
+            border-radius: 8px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            min-height: 300px;
+        }
+
+        .image-preview img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .metadata-form {
+            flex: 1;
+            background: rgba(26, 26, 26, 0.6);
+            border-radius: 8px;
+            padding: 20px;
+            min-width: 300px;
+        }
+
+        /* Add media query for responsiveness */
+        @media (max-width: 768px) {
+            .header-controls {
+                display: none; /* Hide the button row on smaller screens */
+            }
+
+            .header-title {
+                font-size: 20px; /* Optionally adjust title size */
+            }
+        }
     </style>
 </head>
 <body>
@@ -704,6 +793,9 @@
             </button>
             <button class="primary-btn" id="reloadBtn">
                 <i class="fas fa-sync"></i>Reload
+            </button>
+            <button class="primary-btn" id="openEditorBtn">
+                <i class="fas fa-edit"></i>PNG Editor
             </button>
         </div>
         <div class="hamburger-icon">
@@ -777,47 +869,76 @@
         <div class="modal-info" id="modalInfo"></div>
     </div>
 
-    <!-- Add metadata editor panel -->
-    <div class="metadata-editor-panel" id="metadataEditorPanel">
-        <div class="metadata-editor-header">
-            <h3>Edit PNG Metadata</h3>
-            <button class="close-btn" id="closeMetadataEditorBtn">
-                <i class="fas fa-times"></i>
-            </button>
+    <!-- Add PNG Editor Panel -->
+    <div id="pngEditorPanel" class="sliding-container">
+        <div class="sliding-container-header">
+            <h3>PNG Metadata Editor</h3>
+            <button class="sliding-container-close" aria-label="Close Editor">&times;</button>
         </div>
-        <div class="metadata-editor-content">
-            <div class="metadata-form">
-                <form id="metadataForm">
-                    <div class="form-group">
-                        <label for="title">Title</label>
-                        <input type="text" id="title" name="Title" placeholder="Image Title">
+        <div class="sliding-container-content">
+            <div class="editor-panel">
+                <div class="image-preview">
+                    <h3>Image Preview</h3>
+                    <img id="previewImage" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" alt="Preview">
+                </div>
+                
+                <div class="editor-controls">
+                    <div class="controls-group">
+                        <button id="editorOpenFileBtn" class="primary-btn"><i class="fas fa-folder-open"></i>Open File</button>
+                        <button id="editorLoadFromUrlBtn" class="primary-btn"><i class="fas fa-link"></i>Load from URL</button>
                     </div>
-                    <div class="form-group">
-                        <label for="author">Author</label>
-                        <input type="text" id="author" name="Author" placeholder="Author Name">
+                </div>
+                
+                <div class="metadata-form">
+                    <h3>Edit Metadata</h3>
+                    <form id="editorMetadataForm">
+                        <div class="form-group">
+                            <label for="title">Title</label>
+                            <input type="text" id="title" name="Title" placeholder="Image Title">
+                        </div>
+                        <div class="form-group">
+                            <label for="author">Author</label>
+                            <input type="text" id="author" name="Author" placeholder="Author Name">
+                        </div>
+                        <div class="form-group">
+                            <label for="description">Description</label>
+                            <textarea id="description" name="Description" placeholder="Image Description"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="keywords">Keywords (comma-separated)</label>
+                            <input type="text" id="keywords" name="Keywords" placeholder="keyword1, keyword2, ...">
+                        </div>
+                        <div class="form-group">
+                            <label for="copyright">Copyright</label>
+                            <input type="text" id="copyright" name="Copyright" placeholder="Copyright Information">
+                        </div>
+                        <div class="form-group">
+                            <label for="software">Software</label>
+                            <input type="text" id="software" name="Software" placeholder="Software Used">
+                        </div>
+                    </form>
+                    <div class="form-actions">
+                        <button id="editorSaveBtn" class="success-btn" disabled><i class="fas fa-save"></i>Save PNG</button>
+                        <button id="editorAddToGalleryBtn" class="secondary-btn" disabled><i class="fas fa-plus"></i>Add to Gallery</button>
                     </div>
-                    <div class="form-group">
-                        <label for="description">Description</label>
-                        <textarea id="description" name="Description" placeholder="Image Description"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label for="keywords">Keywords (comma-separated)</label>
-                        <input type="text" id="keywords" name="Keywords" placeholder="keyword1, keyword2, ...">
-                    </div>
-                    <div class="form-group">
-                        <label for="copyright">Copyright</label>
-                        <input type="text" id="copyright" name="Copyright" placeholder="Copyright Information">
-                    </div>
-                    <div class="form-group">
-                        <label for="software">Software</label>
-                        <input type="text" id="software" name="Software" placeholder="Software Used">
-                    </div>
-                </form>
+                </div>
             </div>
-            <div class="metadata-actions">
-                <button id="saveMetadataBtn" class="primary-btn">
-                    <i class="fas fa-save"></i>Save Metadata
-                </button>
+        </div>
+    </div>
+
+    <!-- Add URL Input Modal -->
+    <div id="urlModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Load Image from URL</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="url-input-group">
+                <input type="url" id="urlInput" placeholder="Enter image URL" autocomplete="off">
+            </div>
+            <div class="modal-actions">
+                <button class="cancel">Cancel</button>
+                <button class="load">Load Image</button>
             </div>
         </div>
     </div>
@@ -825,21 +946,77 @@
     <div class="toast-container" id="toastContainer"></div>
 
     <script>
-    // Add PNGMetadata class definition before the script
-    class PNGMetadata {
-        async readMetadata(blob) {
-            // For now, return empty metadata
-            return {
-                Title: '',
-                Author: '',
-                Description: '',
-                Keywords: '',
-                Copyright: '',
-                Software: ''
+    // Add script loading function at the start
+    async function loadPNGChunkText() {
+        return new Promise((resolve, reject) => {
+            // Check if already loaded
+            if (window.pngChunkText) {
+                resolve(window.pngChunkText);
+                return;
+            }
+
+            // Create and load script
+            const script = document.createElement('script');
+            script.src = 'js/png-chunk-text.min.js';
+            script.onload = () => {
+                if (window.pngChunkText) {
+                    resolve(window.pngChunkText);
+                } else {
+                    reject(new Error('PNG chunk text library failed to load properly'));
+                }
             };
+            script.onerror = () => reject(new Error('Failed to load PNG chunk text library'));
+            document.head.appendChild(script);
+        });
+    }
+
+    // Modify PNGMetadata class
+    class PNGMetadata {
+        constructor() {
+            this.libraryPromise = window.pngChunkTextPromise;
+        }
+
+        async ensureLibraryLoaded() {
+            try {
+                await this.libraryPromise;
+                return true;
+            } catch (error) {
+                console.error('Failed to load PNG chunk text library:', error);
+                return false;
+            }
+        }
+
+        async readMetadata(blob) {
+            if (!await this.ensureLibraryLoaded()) {
+                throw new Error('PNG metadata library failed to load. Please refresh the page.');
+            }
+
+            if (blob.type !== 'image/png') {
+                console.warn('Attempted to read metadata from non-PNG file:', blob.name);
+                return {}; // Only support reading PNG metadata
+            }
+
+            try {
+                const buffer = await blob.arrayBuffer();
+                const chunks = window.pngChunkText.default.decode(buffer);
+                const metadata = {};
+                chunks.forEach(chunk => {
+                    metadata[chunk.keyword] = chunk.text;
+                });
+                console.log('Decoded PNG metadata:', metadata);
+                return metadata;
+            } catch (error) {
+                console.error('Error reading PNG metadata:', error);
+                showStatus('Failed to read PNG metadata: ' + error.message, 'error');
+                return {}; // Return empty object on error
+            }
         }
 
         async writeMetadata(blob, metadata) {
+            if (!await this.ensureLibraryLoaded()) {
+                throw new Error('PNG metadata library failed to load. Please refresh the page.');
+            }
+
             // For now, return the original blob
             return blob;
         }
@@ -904,6 +1081,30 @@
     // Add metadata editor functionality
     const metadataEditor = new PNGMetadata();
     let currentEditingImage = null;
+
+    // Add PNG Editor functionality
+    let currentEditorFile = null;
+    let editorFileHandle = null;
+
+    // Initialize PNG metadata editor
+    const pngMetadata = new PNGMetadata();
+
+    // Editor panel elements
+    const pngEditorPanel = document.getElementById('pngEditorPanel');
+    const editorOpenFileBtn = document.getElementById('editorOpenFileBtn');
+    const editorLoadFromUrlBtn = document.getElementById('editorLoadFromUrlBtn');
+    const editorSaveBtn = document.getElementById('editorSaveBtn');
+    const editorAddToGalleryBtn = document.getElementById('editorAddToGalleryBtn');
+    const editorMetadataForm = document.getElementById('editorMetadataForm');
+    const previewImage = document.getElementById('previewImage');
+    const openEditorBtn = document.getElementById('openEditorBtn');
+
+    // Add editor button to menu
+    document.querySelector('.menu-buttons').insertAdjacentHTML('beforeend', `
+        <button id="menuOpenEditorBtn"><i class="fas fa-edit"></i>PNG Editor</button>
+    `);
+
+    const menuOpenEditorBtn = document.getElementById('menuOpenEditorBtn');
 
     // Initialize IndexedDB
     async function openDB() {
@@ -978,6 +1179,8 @@
 
         try {
             let successCount = 0;
+            let skippedCount = 0;
+            let errorCount = 0;
             let processedCount = 0;
             const totalFiles = files.length;
 
@@ -985,16 +1188,37 @@
             console.log(`Starting to process ${totalFiles} files`);
 
             for (const file of files) {
+                processedCount++;
+                let skipReason = null;
                 try {
                     console.log('Processing file:', file.name, 'Type:', file.type, 'Size:', file.size);
                     
-                    // Basic validation
-                    if (!file.type.startsWith('image/')) {
-                        console.log('Skipping non-image file:', file.name);
-                        continue;
+                    // --- Start Validation ---
+                    // 1. Type validation
+                    if (!ALLOWED_TYPES.includes(file.type)) {
+                        skipReason = `Unsupported file type (${file.type})`;
+                    }
+                    // 2. Size validation
+                    else if (file.size > MAX_FILE_SIZE) {
+                        skipReason = `File too large (${formatFileSize(file.size)}, max ${formatFileSize(MAX_FILE_SIZE)})`;
+                    }
+                    // 3. Dimension validation (Requires loading the image)
+                    else {
+                        const dimensions = await getImageDimensions(file);
+                        if (dimensions.width > MAX_DIMENSION || dimensions.height > MAX_DIMENSION) {
+                            skipReason = `Image dimensions too large (${dimensions.width}x${dimensions.height}, max ${MAX_DIMENSION}x${MAX_DIMENSION})`;
+                        }
+                    }
+                    // --- End Validation ---
+
+                    if (skipReason) {
+                        console.log(`Skipping ${file.name}: ${skipReason}`);
+                        showStatus(`Skipped ${file.name}: ${skipReason}`, 'info');
+                        skippedCount++;
+                        continue; // Skip to the next file
                     }
 
-                    // Simple file reading approach
+                    // Simple file reading approach (only if validation passes)
                     const reader = new FileReader();
                     await new Promise((resolve, reject) => {
                         reader.onload = async () => {
@@ -1021,42 +1245,77 @@
 
                                 successCount++;
                                 console.log('File processed successfully:', file.name);
-                            } catch (error) {
-                                console.error('Error processing file:', file.name, error);
-                                reject(error);
+                            } catch (dbError) {
+                                console.error('Error adding file to DB:', file.name, dbError);
+                                reject(dbError); // Reject the outer promise for this file
                             }
-                            resolve();
+                            resolve(); // Resolve the reader promise
                         };
-                        reader.onerror = () => {
-                            console.error('Error reading file:', file.name);
-                            reject(reader.error);
+                        reader.onerror = (readError) => {
+                            console.error('Error reading file:', file.name, readError);
+                            reject(reader.error); // Reject the outer promise for this file
                         };
                         reader.readAsDataURL(file);
-                    });
+                    }); // End of reader promise
 
                 } catch (error) {
                     console.error(`Failed to process ${file.name}:`, error);
                     showStatus(`Failed to process ${file.name}: ${error.message}`, 'error');
+                    errorCount++;
                 }
                 
-                processedCount++;
+                // Update progress periodically
                 if (processedCount % 5 === 0 || processedCount === totalFiles) {
-                    showStatus(`Processing: ${processedCount}/${totalFiles} files`, 'info');
+                    showStatus(`Processing: ${processedCount}/${totalFiles} files (${successCount} added, ${skippedCount} skipped, ${errorCount} errors)`, 'info');
                 }
             }
             
+            // Final status update
+            let finalMessage = '';
             if (successCount > 0) {
-                console.log(`Successfully processed ${successCount} files`);
-                await loadImagesFromDB();
-                showStatus(`Added ${successCount} image(s) successfully`, 'success');
-            } else {
-                console.log('No files were processed successfully');
-                showStatus('No valid images found', 'info');
+                finalMessage += `Added ${successCount} image(s).`;
             }
+            if (skippedCount > 0) {
+                finalMessage += ` Skipped ${skippedCount} file(s).`;
+            }
+            if (errorCount > 0) {
+                finalMessage += ` Failed to process ${errorCount} file(s).`;
+            }
+
+            if (finalMessage) {
+                console.log(`Processing complete. ${finalMessage}`);
+                await loadImagesFromDB(); // Reload only if something changed or might have changed
+                showStatus(`Processing complete. ${finalMessage}`, successCount > 0 ? 'success' : 'info');
+            } else if (totalFiles > 0) {
+                console.log('No files were processed (check types, sizes, dimensions).');
+                showStatus('No valid images found to add', 'info');
+            } // If totalFiles was 0, the initial check handles it
+
         } catch (error) {
-            console.error('Error in handleFiles:', error);
+            console.error('Error in handleFiles outer try:', error);
             showStatus('Failed to process files: ' + error.message, 'error');
         }
+    }
+
+    // Helper function to get image dimensions
+    async function getImageDimensions(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    resolve({ width: img.width, height: img.height });
+                };
+                img.onerror = () => {
+                    reject(new Error('Could not load image to get dimensions'));
+                };
+                img.src = e.target.result;
+            };
+            reader.onerror = () => {
+                reject(new Error('Could not read file to get dimensions'));
+            };
+            reader.readAsDataURL(file);
+        });
     }
 
     // Load images from IndexedDB with improved error handling
@@ -1425,6 +1684,9 @@
         // Initialize metadata editor
         initMetadataEditor();
 
+        // Editor panel functions
+        toggleEditorPanel(false);
+
         console.log('Event listeners setup complete');
     }
 
@@ -1487,49 +1749,58 @@
         const metadataForm = document.getElementById('metadataForm');
 
         // Close panel
-        closeBtn.onclick = () => {
-            metadataPanel.classList.remove('active');
-        };
+        // closeBtn.onclick = () => { // <--- This line likely causes the error
+        //     metadataPanel.classList.remove('active');
+        // };
 
         // Edit metadata button
         editMetadataBtn.onclick = async () => {
-            if (!currentImageIndex >= 0) return;
-            
+            if (currentImageIndex < 0) return; // Ensure index is valid
             const entry = imageEntries[currentImageIndex];
-            currentEditingImage = entry;
             
             try {
-                // Read metadata from the image
-                const metadata = await metadataEditor.readMetadata(new Blob([entry.base64Data]));
-                populateMetadataForm(metadata);
-                metadataPanel.classList.add('active');
+                showStatus('Loading image into editor...', 'info');
+                
+                // Convert Data URL to File object
+                const response = await fetch(entry.base64Data);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch image data (status: ${response.status})`);
+                }
+                const blob = await response.blob();
+                const file = new File([blob], entry.name, { type: blob.type });
+
+                // Load into the main editor panel (this function also opens the panel)
+                await loadImageIntoEditor(file);
+                
+                // Close the modal view
+                closeModal(); 
             } catch (error) {
-                console.error('Error reading metadata:', error);
-                showStatus('Failed to read image metadata', 'error');
+                console.error('Error preparing image for editor:', error);
+                showStatus(`Failed to load image into editor: ${error.message}`, 'error');
             }
         };
 
         // Save metadata
-        saveMetadataBtn.onclick = async () => {
-            if (!currentEditingImage) return;
+        // saveMetadataBtn.onclick = async () => {
+        //     if (!currentEditingImage) return;
+        //
+        //     try {
+        //         const metadata = collectMetadata();
+        //         const updatedImage = await metadataEditor.writeMetadata(
+        //             new Blob([currentEditingImage.base64Data]),
+        //             metadata
+        //         );
 
-            try {
-                const metadata = collectMetadata();
-                const updatedImage = await metadataEditor.writeMetadata(
-                    new Blob([currentEditingImage.base64Data]),
-                    metadata
-                );
-
-                // Update the image in the gallery
-                currentEditingImage.base64Data = await blobToBase64(updatedImage);
-                displayImages();
-                showStatus('Metadata updated successfully', 'success');
-                metadataPanel.classList.remove('active');
-            } catch (error) {
-                console.error('Error saving metadata:', error);
-                showStatus('Failed to save metadata', 'error');
-            }
-        };
+        //         // Update the image in the gallery
+        //         currentEditingImage.base64Data = await blobToBase64(updatedImage);
+        //         displayImages();
+        //         showStatus('Metadata updated successfully', 'success');
+        //         metadataPanel.classList.remove('active');
+        //     } catch (error) {
+        //         console.error('Error saving metadata:', error);
+        //         showStatus('Failed to save metadata', 'error');
+        //     }
+        // };
     }
 
     // Populate metadata form
@@ -1564,14 +1835,249 @@
         });
     }
 
+    // Editor functions
+    function toggleEditorPanel(show) {
+        if (show) {
+            // Ensure the panel is properly positioned and visible, but start off-screen
+            pngEditorPanel.style.display = 'flex'; 
+            pngEditorPanel.classList.remove('active'); // Ensure it starts off-screen if somehow active
+            document.body.style.overflow = 'hidden'; // Prevent background scrolling
+            
+            // Use a tiny timeout to allow the browser to apply the display change 
+            // before triggering the transition by adding the 'active' class.
+            setTimeout(() => {
+                pngEditorPanel.classList.add('active');
+            }, 10); // 10ms should be enough
+
+        } else {
+            // Start the transition first by removing active class
+            pngEditorPanel.classList.remove('active');
+            // Reset editor state and hide after transition completes
+            setTimeout(() => {
+                // Check if it's still meant to be hidden before changing display
+                if (!pngEditorPanel.classList.contains('active')) {
+                    pngEditorPanel.style.display = 'none';
+                    document.body.style.overflow = '';
+                    currentEditorFile = null;
+                    editorFileHandle = null;
+                    previewImage.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+                    editorMetadataForm.reset();
+                    editorSaveBtn.disabled = true;
+                    editorAddToGalleryBtn.disabled = true;
+                }
+            }, 300); // Match transition duration (0.3s)
+        }
+    }
+
+    async function loadImageIntoEditor(file) {
+        try {
+            // Ensure editor panel is visible first
+            if (!pngEditorPanel.classList.contains('active')) {
+                toggleEditorPanel(true);
+            }
+
+            currentEditorFile = file;
+            
+            // Show loading state
+            previewImage.style.opacity = '0.5';
+            showStatus('Loading image...', 'info');
+            
+            // Create preview
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                previewImage.src = e.target.result;
+                previewImage.style.opacity = '1';
+            };
+            reader.readAsDataURL(file);
+
+            // Load metadata if it's a PNG
+            if (file.type === 'image/png') {
+                // Function to perform the metadata reading and form population
+                const processPngMetadata = async () => {
+                    try {
+                        // Assuming pngChunkText is available due to 'defer' and DOMContentLoaded
+                        const metadata = await pngMetadata.readMetadata(file);
+                        populateEditorForm(metadata);
+                    } catch (readError) {
+                         console.error('Error during PNG metadata read:', readError);
+                         showStatus(`Error reading PNG metadata: ${readError.message}`, 'error');
+                         editorMetadataForm.reset(); // Reset form on error
+                    }
+                };
+
+                // Directly call the processing function
+                await processPngMetadata();
+
+            } else {
+                // Handle non-PNG files (existing logic)
+                editorMetadataForm.reset();
+                const softwareInput = editorMetadataForm.querySelector('[name="Software"]');
+                if (softwareInput) {
+                    softwareInput.value = 'PNG Metadata Editor';
+                }
+            }
+
+            showStatus('Image loaded in editor', 'success');
+            // Enable buttons only after successful load (including metadata read if applicable)
+            editorSaveBtn.disabled = false;
+            editorAddToGalleryBtn.disabled = false;
+
+        } catch (error) {
+            // Catch errors from the promise (like timeout) or other loading issues
+            showStatus(`Error loading image: ${error.message}`, 'error');
+            console.error('Error in loadImageIntoEditor:', error);
+            previewImage.style.opacity = '1'; // Ensure opacity is reset on error
+            // Disable buttons if loading failed overall
+            editorSaveBtn.disabled = true;
+            editorAddToGalleryBtn.disabled = true;
+        }
+    }
+
+    function populateEditorForm(metadata) {
+        const inputs = editorMetadataForm.querySelectorAll('input, textarea');
+        inputs.forEach(input => {
+            if (input.name) {
+                input.value = metadata[input.name] || '';
+            }
+        });
+    }
+
+    function collectEditorMetadata() {
+        const metadata = {};
+        const inputs = editorMetadataForm.querySelectorAll('input, textarea');
+        inputs.forEach(input => {
+            if (input.name && input.value.trim()) {
+                metadata[input.name] = input.value.trim();
+            }
+        });
+        return metadata;
+    }
+
+    // Editor event listeners
+    openEditorBtn.addEventListener('click', () => toggleEditorPanel(true));
+    menuOpenEditorBtn.addEventListener('click', () => toggleEditorPanel(true));
+    pngEditorPanel.querySelector('.sliding-container-close').addEventListener('click', () => toggleEditorPanel(false));
+
+    editorOpenFileBtn.addEventListener('click', () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = (e) => {
+            const file = e.target.files[0];
+            if (file) loadImageIntoEditor(file);
+        };
+        input.click();
+    });
+
+    editorLoadFromUrlBtn.addEventListener('click', () => {
+        urlModal.style.display = 'block';
+        urlInput.focus();
+    });
+
+    editorSaveBtn.addEventListener('click', async () => {
+        if (!currentEditorFile) return;
+
+        try {
+            editorSaveBtn.disabled = true;
+            editorSaveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>Saving...';
+            
+            const metadata = collectEditorMetadata();
+            
+            // Convert to PNG if not already
+            let pngFile = currentEditorFile;
+            if (!currentEditorFile.type.includes('png')) {
+                showStatus('Converting to PNG format...', 'info');
+                pngFile = await convertToPNG(currentEditorFile);
+            }
+            
+            // Add metadata
+            const finalFile = await pngMetadata.writeMetadata(pngFile, metadata);
+            
+            // Save file
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(finalFile);
+            a.download = currentEditorFile.name.replace(/\.[^/.]+$/, '') + '.png';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            
+            showStatus('PNG file saved successfully', 'success');
+        } catch (error) {
+            showStatus(`Error saving file: ${error.message}`, 'error');
+            console.error('Error saving file:', error);
+        } finally {
+            editorSaveBtn.disabled = false;
+            editorSaveBtn.innerHTML = '<i class="fas fa-save"></i>Save PNG';
+        }
+    });
+
+    editorAddToGalleryBtn.addEventListener('click', async () => {
+        if (!currentEditorFile) return;
+
+        try {
+            editorAddToGalleryBtn.disabled = true;
+            editorAddToGalleryBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>Adding...';
+            
+            const metadata = collectEditorMetadata();
+            
+            // Convert to PNG if needed and add metadata
+            let finalFile = currentEditorFile;
+            if (!currentEditorFile.type.includes('png')) {
+                showStatus('Converting to PNG format...', 'info');
+                finalFile = await convertToPNG(currentEditorFile);
+            }
+            finalFile = await pngMetadata.writeMetadata(finalFile, metadata);
+            
+            // Add to gallery
+            await processAndAddFiles([finalFile]);
+            
+            showStatus('Image added to gallery successfully', 'success');
+            toggleEditorPanel(false); // Close editor after adding
+        } catch (error) {
+            showStatus(`Error adding to gallery: ${error.message}`, 'error');
+            console.error('Error adding to gallery:', error);
+        } finally {
+            editorAddToGalleryBtn.disabled = false;
+            editorAddToGalleryBtn.innerHTML = '<i class="fas fa-plus"></i>Add to Gallery';
+        }
+    });
+
+    // Helper function to convert image to PNG
+    async function convertToPNG(file) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                canvas.toBlob(blob => {
+                    resolve(new File([blob], file.name.replace(/\.[^/.]+$/, '') + '.png', { type: 'image/png' }));
+                }, 'image/png');
+            };
+            img.onerror = () => reject(new Error('Failed to load image for conversion'));
+            img.src = URL.createObjectURL(file);
+        });
+    }
+
     // Initialize gallery when page loads
-    window.addEventListener('load', () => {
+    document.addEventListener('DOMContentLoaded', () => {
         initGallery();
         initMetadataEditor();
     });
 
     // Add CSS variable for thumbnail size
     document.documentElement.style.setProperty('--thumbnail-size', '250px');
+
+    // Update the processAndAddFiles function to maintain editor state
+    async function processAndAddFiles(files, sourceDescription = "files") {
+        const wasEditorActive = pngEditorPanel.classList.contains('active');
+        // ... existing processAndAddFiles code ...
+        if (wasEditorActive) {
+            toggleEditorPanel(true); // Restore editor visibility if it was active
+        }
+    }
     </script>
 </body>
 </html> 
