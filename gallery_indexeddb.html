@@ -759,6 +759,18 @@
                 font-size: 20px; /* Optionally adjust title size */
             }
         }
+
+        /* Added for selection */
+        .thumbnail.selected {
+            border: 3px solid #4CAF50; /* Green border for selection */
+            box-shadow: 0 0 15px rgba(76, 175, 80, 0.5);
+        }
+
+        .thumbnail:hover.selected { /* Keep hover effect consistent */
+             transform: translateY(-5px) scale(1.02);
+             box-shadow: 0 0 15px rgba(76, 175, 80, 0.5), 0 8px 24px rgba(0, 0, 0, 0.3);
+             border-color: #4CAF50;
+        }
     </style>
 </head>
 <body>
@@ -766,21 +778,7 @@
     <div class="static-header">
         <div class="header-title">Image Gallery (IndexedDB)</div>
         <div class="header-controls">
-            <button class="primary-btn" id="selectFolderBtn">
-                <i class="fas fa-images"></i>Select Images
-            </button>
-            <button class="primary-btn" id="addFilesBtn">
-                <i class="fas fa-plus"></i>Add Files
-            </button>
-            <button class="primary-btn" id="clearGalleryBtn">
-                <i class="fas fa-trash"></i>Clear Gallery
-            </button>
-            <button class="primary-btn" id="reloadBtn">
-                <i class="fas fa-sync"></i>Reload
-            </button>
-            <button class="primary-btn" id="openEditorBtn">
-                <i class="fas fa-edit"></i>PNG Editor
-            </button>
+            <!-- Buttons removed -->
         </div>
         <div class="hamburger-icon">
             <span></span>
@@ -798,6 +796,8 @@
                 <button id="menuAddFilesBtn"><i class="fas fa-plus"></i>Add Files</button>
                 <button id="menuClearGalleryBtn"><i class="fas fa-trash"></i>Clear Gallery</button>
                 <button id="menuReloadBtn"><i class="fas fa-sync"></i>Reload</button>
+                <button id="menuTagSelectedBtn" style="display: none;"><i class="fas fa-tags"></i>Tag Selected (<span id="menuSelectionCount">0</span>)</button> <!-- Added for Menu -->
+                <button id="menuDownloadSelectedBtn" style="display: none;"><i class="fas fa-download"></i>Download Selected (<span id="menuSelectionCountDL">0</span>)</button> <!-- Added for Menu -->
             </div>
         </div>
 
@@ -808,6 +808,14 @@
                 <button id="sortByDateBtn"><i class="fas fa-calendar"></i>By Date</button>
                 <button id="sortBySizeBtn"><i class="fas fa-weight-hanging"></i>By Size</button>
                 <button id="restoreOrderBtn"><i class="fas fa-undo"></i>Restore Order</button>
+            </div>
+        </div>
+
+        <div class="menu-section" id="tagsMenuSection">
+            <h3>Tags</h3>
+            <div id="tagListContainer" style="padding: 5px 8px; display: flex; flex-wrap: wrap; gap: 5px;">
+                <!-- Tags will be dynamically added here -->
+                <span style="color: #909090; font-size: 12px; width: 100%;">Loading tags...</span>
             </div>
         </div>
 
@@ -923,6 +931,24 @@
             <div class="modal-actions">
                 <button class="cancel">Cancel</button>
                 <button class="load">Load Image</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Tag Modal -->
+    <div class="modal" id="bulkTagModal" style="z-index: 1002;"> <!-- Slightly higher z-index -->
+        <div class="modal-content" style="max-width: 400px; background: rgba(45, 45, 45, 0.9); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-radius: 12px; padding: 20px; border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 style="color: #e0e0e0; margin: 0;">Bulk Add Tags</h3>
+                <button class="close-btn" id="closeBulkTagModalBtn" style="font-size: 24px; line-height: 1;">&times;</button>
+            </div>
+            <div class="form-group">
+                <label for="bulkTagInput" style="display: block; margin-bottom: 5px; color: #e0e0e0; font-size: 14px;">Tags (comma-separated)</label>
+                <input type="text" id="bulkTagInput" placeholder="e.g., nature, landscape, holiday" style="width: 100%; padding: 10px; background: rgba(66, 66, 66, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; color: #e0e0e0; font-size: 14px;">
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                <button class="modal-btn" id="cancelBulkTagBtn" style="background: rgba(97, 97, 97, 0.7);"><i class="fas fa-times"></i>Cancel</button>
+                <button class="modal-btn" id="applyBulkTagBtn" style="background: rgba(76, 175, 80, 0.6);"><i class="fas fa-check"></i>Apply Tags</button>
             </div>
         </div>
     </div>
@@ -1056,13 +1082,21 @@
     let currentImageIndex = -1;
     let imageEntries = [];
     let originalOrder = [];
+    let selectedIndices = []; // Added for multi-select
+    let selectedFilterTags = new Set(); // Added for tag filtering
+
+    // --- Bulk Tag Modal Elements & References --- Start
+    let bulkTagModal, bulkTagInput, applyBulkTagBtn, cancelBulkTagBtn, closeBulkTagModalBtn, tagSelectedBtn, menuTagSelectedBtn;
+    // --- Download Selected Elements & References --- Start
+    let downloadSelectedBtn, menuDownloadSelectedBtn;
+    // --- Download Selected Elements & References --- End
 
     // DOM Elements
     const galleryGrid = document.getElementById('galleryGrid');
-    const selectFolderBtn = document.getElementById('selectFolderBtn');
-    const addFilesBtn = document.getElementById('addFilesBtn');
-    const clearGalleryBtn = document.getElementById('clearGalleryBtn');
-    const reloadBtn = document.getElementById('reloadBtn');
+    // const selectFolderBtn = document.getElementById('selectFolderBtn'); // Removed from header
+    // const addFilesBtn = document.getElementById('addFilesBtn');       // Removed from header
+    // const clearGalleryBtn = document.getElementById('clearGalleryBtn'); // Removed from header
+    // const reloadBtn = document.getElementById('reloadBtn');           // Removed from header
 
     // Create file input for multiple files
     const fileInput = document.createElement('input');
@@ -1112,7 +1146,7 @@
     const editorAddToGalleryBtn = document.getElementById('editorAddToGalleryBtn');
     const editorMetadataForm = document.getElementById('editorMetadataForm');
     const previewImage = document.getElementById('previewImage');
-    const openEditorBtn = document.getElementById('openEditorBtn');
+    // const openEditorBtn = document.getElementById('openEditorBtn'); // Removed from header
 
     // Add editor button to menu
     document.querySelector('.menu-buttons').insertAdjacentHTML('beforeend', `
@@ -1171,8 +1205,21 @@
     async function initGallery() {
         try {
             await openDB();
+             // --- Initialize Bulk Tag Elements Here after DOM is ready --- Start
+            bulkTagModal = document.getElementById('bulkTagModal');
+            bulkTagInput = document.getElementById('bulkTagInput');
+            applyBulkTagBtn = document.getElementById('applyBulkTagBtn');
+            cancelBulkTagBtn = document.getElementById('cancelBulkTagBtn');
+            closeBulkTagModalBtn = document.getElementById('closeBulkTagModalBtn');
+            tagSelectedBtn = document.getElementById('tagSelectedBtn');
+            menuTagSelectedBtn = document.getElementById('menuTagSelectedBtn');
+            // --- Initialize Download Selected Elements Here --- Start
+            downloadSelectedBtn = document.getElementById('downloadSelectedBtn');
+            menuDownloadSelectedBtn = document.getElementById('menuDownloadSelectedBtn');
+            // --- Initialize Download Selected Elements Here --- End
             await loadImagesFromDB();
-            setupEventListeners();
+            setupEventListeners(); // Existing listeners
+            setupBulkTagListeners(); // Add bulk tag listeners
             updateButtonText();
             showStatus('Gallery initialized successfully', 'success');
         } catch (error) {
@@ -1299,7 +1346,9 @@
 
             if (finalMessage) {
                 console.log(`Processing complete. ${finalMessage}`);
-                await loadImagesFromDB(); // Reload only if something changed or might have changed
+                // Reload gallery which will also update tags
+                console.log("Calling loadImagesFromDB after handleFiles completion..."); // Log before call
+                await loadImagesFromDB(); // This already calls updateTagListDisplay now
                 showStatus(`Processing complete. ${finalMessage}`, successCount > 0 ? 'success' : 'info');
             } else if (totalFiles > 0) {
                 console.log('No files were processed (check types, sizes, dimensions).');
@@ -1347,14 +1396,30 @@
             const store = transaction.objectStore(IMAGE_STORE_NAME);
             const request = store.getAll();
 
-            request.onsuccess = () => {
+            request.onsuccess = async () => { // Make onsuccess async
                 try {
-                    imageEntries = request.result;
-                    originalOrder = [...imageEntries];
+                    let rawEntries = request.result;
+                    imageEntries = []; // Clear before processing
+                    originalOrder = [];
+                    selectedIndices = [];
+                    selectedFilterTags.clear(); // Clear filters on full reload
+
+                    // Process entries to add keywords cache
+                    for (const entry of rawEntries) {
+                        entry.keywords = await getKeywordsFromEntry(entry); // Add keywords Set
+                        imageEntries.push(entry);
+                    }
+
+                    originalOrder = [...imageEntries]; // Store order after processing
+
+                    updateSelectionUI(); // Use the UI update function
                     displayImages();
+                    console.log("[loadImagesFromDB] About to call updateTagListDisplay..."); // <<< ADDED LOG BEFORE CALL
+                    await updateTagListDisplay(); // <<< Existing Call
+                    console.log("[loadImagesFromDB] Finished calling updateTagListDisplay."); // <<< ADDED LOG AFTER CALL
                     resolve();
                 } catch (error) {
-                    console.error('Error processing loaded images:', error);
+                    console.error('[loadImagesFromDB] Error within onsuccess handler:', error);
                     showStatus('Failed to process loaded images', 'error');
                     reject(error);
                 }
@@ -1379,17 +1444,43 @@
         });
     }
 
-    // Display images in the gallery
+    // Display images in the gallery (Now includes filtering)
     function displayImages() {
         galleryGrid.innerHTML = '';
-        
-        if (imageEntries.length === 0) {
-            showStatus('No images in gallery', 'info');
-            return;
-        }
+        console.log(`[displayImages] Filtering with tags:`, selectedFilterTags);
 
-        imageEntries.forEach((entry, index) => {
-            const thumbnail = createThumbnail(entry, index);
+        const imagesToDisplay = imageEntries.filter(entry => {
+            if (selectedFilterTags.size === 0) {
+                return true; // No filters active, show all
+            }
+            if (!entry.keywords || entry.keywords.size === 0) {
+                return false; // Image has no keywords, cannot match OR filters either
+            }
+            // Check if image keywords contain ANY selected filter tags (OR logic)
+            for (const filterTag of selectedFilterTags) {
+                if (entry.keywords.has(filterTag)) {
+                    return true; // Found at least one matching tag
+                }
+            }
+            return false; // No matching tags found after checking all filters
+        });
+
+        console.log(`[displayImages] Displaying ${imagesToDisplay.length} out of ${imageEntries.length} images.`);
+
+        if (imagesToDisplay.length === 0) {
+             let message = imageEntries.length === 0 ? 'No images in gallery' : 'No images match the selected tags.';
+             showStatus(message, 'info');
+             // Display message in the grid area
+             galleryGrid.innerHTML = `<div style="color: #909090; padding: 20px; text-align: center;">${message}</div>`;
+             return;
+         }
+
+        imagesToDisplay.forEach((entry) => {
+            // Need the original index for selection handling
+            const originalIndex = imageEntries.findIndex(e => e.id === entry.id);
+            if (originalIndex === -1) return; // Should not happen
+
+            const thumbnail = createThumbnail(entry, originalIndex);
             galleryGrid.appendChild(thumbnail);
         });
     }
@@ -1398,6 +1489,7 @@
     function createThumbnail(entry, index) {
         const thumbnail = document.createElement('div');
         thumbnail.className = 'thumbnail';
+        thumbnail.dataset.index = index; // Add index attribute for easy selection later
         thumbnail.innerHTML = `
             <img src="${entry.base64Data}" alt="${entry.name}" class="thumbnail-img">
             <div class="thumbnail-info">
@@ -1406,8 +1498,71 @@
             </div>
         `;
 
-        thumbnail.addEventListener('click', () => showFullImage(index));
+        // Update the click listener for selection
+        thumbnail.addEventListener('click', (event) => {
+            if (event.ctrlKey || event.metaKey) { // Check for Ctrl or Cmd key
+                toggleSelection(index);
+            } else {
+                // Only show full image on a simple click (no modifier keys)
+                showFullImage(index);
+            }
+        });
+
+        // Apply selected class if this index is already selected (e.g., after reload/redisplay)
+        if (selectedIndices.includes(index)) {
+            thumbnail.classList.add('selected');
+        }
+
         return thumbnail;
+    }
+
+    // Function to handle toggling selection state
+    function toggleSelection(index) {
+        const thumbnailElement = galleryGrid.querySelector(`.thumbnail[data-index="${index}"]`);
+        if (!thumbnailElement) return; // Should not happen
+
+        const selectedIndexPosition = selectedIndices.indexOf(index);
+        if (selectedIndexPosition > -1) {
+            // Already selected, so deselect
+            selectedIndices.splice(selectedIndexPosition, 1);
+            thumbnailElement.classList.remove('selected');
+        } else {
+            // Not selected, so select
+            selectedIndices.push(index);
+            thumbnailElement.classList.add('selected');
+        }
+        console.log('Selected indices:', selectedIndices); // For debugging
+        // Update UI elements that depend on selection
+        updateSelectionUI();
+    }
+
+    // Update UI based on selection state (e.g., buttons)
+    function updateSelectionUI() {
+        const count = selectedIndices.length;
+        // const selectionCountSpan = document.getElementById('selectionCount'); // Span removed from header
+        const menuSelectionCountSpan = document.getElementById('menuSelectionCount');
+        // const selectionCountDLSpan = document.getElementById('selectionCountDL'); // Span removed from header
+        const menuSelectionCountDLSpan = document.getElementById('menuSelectionCountDL');
+
+        if (count > 0) {
+            // tagSelectedBtn.style.display = 'flex'; // Button removed from header
+            menuTagSelectedBtn.style.display = 'flex';
+            // downloadSelectedBtn.style.display = 'flex'; // Button removed from header
+            menuDownloadSelectedBtn.style.display = 'flex';
+            // selectionCountSpan.textContent = count; // Span removed from header
+            menuSelectionCountSpan.textContent = count;
+            // selectionCountDLSpan.textContent = count; // Span removed from header
+            menuSelectionCountDLSpan.textContent = count;
+        } else {
+            // tagSelectedBtn.style.display = 'none'; // Button removed from header
+            menuTagSelectedBtn.style.display = 'none';
+            // downloadSelectedBtn.style.display = 'none'; // Button removed from header
+            menuDownloadSelectedBtn.style.display = 'none';
+            // selectionCountSpan.textContent = '0'; // Span removed from header
+            menuSelectionCountSpan.textContent = '0';
+            // selectionCountDLSpan.textContent = '0'; // Span removed from header
+            menuSelectionCountDLSpan.textContent = '0';
+        }
     }
 
     // Show full image in modal
@@ -1467,13 +1622,23 @@
     // Delete current image
     async function deleteCurrentImage() {
         const entry = imageEntries[currentImageIndex];
-        
+        const indexToDelete = currentImageIndex; // Store index before closing modal
+
         try {
             await deleteImageFromDB(entry.id);
-            imageEntries.splice(currentImageIndex, 1);
-            closeModal();
-            displayImages();
+            imageEntries.splice(indexToDelete, 1);
+            originalOrder = imageEntries.map(e => ({...e})); // Update original order too
+
+            closeModal(); // Close modal first
+            displayImages(); // Redisplay remaining images
+            await updateTagListDisplay(); // <<< CALL ADDED HERE
             showStatus('Image deleted successfully', 'success');
+
+            // Adjust currentImageIndex if needed (though modal is closed)
+            if (currentImageIndex >= imageEntries.length) {
+                 currentImageIndex = imageEntries.length - 1;
+            }
+
         } catch (error) {
             showStatus('Failed to delete image: ' + error.message, 'error');
         }
@@ -1555,11 +1720,11 @@
             }
         };
 
-        // Header buttons
-        selectFolderBtn.addEventListener('click', handleFileSelect);
-        addFilesBtn.addEventListener('click', handleFileSelect);
-        clearGalleryBtn.addEventListener('click', handleClearGallery);
-        reloadBtn.addEventListener('click', handleReload);
+        // Header buttons (Removed)
+        // selectFolderBtn.addEventListener('click', handleFileSelect);
+        // addFilesBtn.addEventListener('click', handleFileSelect);
+        // clearGalleryBtn.addEventListener('click', handleClearGallery);
+        // reloadBtn.addEventListener('click', handleReload);
 
         // Menu buttons
         document.getElementById('menuSelectFolderBtn').addEventListener('click', handleFileSelect);
@@ -1722,7 +1887,11 @@
                     console.log('Image store cleared successfully');
                     imageEntries = [];
                     originalOrder = [];
+                    selectedIndices = []; // Reset selection when clearing
+                    selectedFilterTags.clear(); // <<< Clear filter tags
+                    updateSelectionUI();
                     displayImages();
+                    updateTagListDisplay(); // Update tag list (will show empty)
                     showStatus('Gallery cleared successfully', 'success');
                     resolve();
                 };
@@ -1751,7 +1920,7 @@
 
     // Update button text to reflect actual functionality
     function updateButtonText() {
-        selectFolderBtn.innerHTML = '<i class="fas fa-images"></i>Select Images';
+        // selectFolderBtn.innerHTML = '<i class="fas fa-images"></i>Select Images'; // Removed from header
         document.getElementById('menuSelectFolderBtn').innerHTML = '<i class="fas fa-images"></i>Select Images';
     }
 
@@ -1948,7 +2117,7 @@
     }
 
     // Editor event listeners
-    openEditorBtn.addEventListener('click', () => toggleEditorPanel(true));
+    // openEditorBtn.addEventListener('click', () => toggleEditorPanel(true)); // Removed from header
     menuOpenEditorBtn.addEventListener('click', () => toggleEditorPanel(true));
     pngEditorPanel.querySelector('.sliding-container-close').addEventListener('click', () => toggleEditorPanel(false));
 
@@ -2071,6 +2240,354 @@
             toggleEditorPanel(true); // Restore editor visibility if it was active
         }
     }
+
+    // --- Bulk Tag Modal Functions --- Start
+    function openBulkTagModal() {
+        if (selectedIndices.length === 0) {
+            showStatus('No images selected to tag.', 'info');
+            return;
+        }
+        bulkTagInput.value = ''; // Clear input field
+        bulkTagModal.style.display = 'block';
+        setTimeout(() => bulkTagModal.classList.add('show'), 10); // Add fade-in effect if modal class has opacity transition
+        bulkTagInput.focus(); // Focus the input field
+    }
+
+    function closeBulkTagModal() {
+        bulkTagModal.classList.remove('show');
+        setTimeout(() => {
+            bulkTagModal.style.display = 'none';
+        }, 300); // Match potential transition duration
+    }
+
+    async function applyBulkTags() {
+        const tagsToAdd = bulkTagInput.value.split(',')
+            .map(tag => tag.trim())
+            .filter(tag => tag !== ''); // Get non-empty tags
+
+        if (tagsToAdd.length === 0) {
+            showStatus('Please enter at least one tag.', 'info');
+            return;
+        }
+
+        if (selectedIndices.length === 0) {
+            showStatus('No images selected.', 'error'); // Should not happen if button was visible
+            closeBulkTagModal();
+            return;
+        }
+
+        const indicesToProcess = [...selectedIndices]; // Copy selected indices
+        const total = indicesToProcess.length;
+        let successCount = 0;
+        let errorCount = 0;
+
+        showStatus(`Applying tags to ${total} image(s)...`, 'info');
+        applyBulkTagBtn.disabled = true;
+        applyBulkTagBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>Applying...';
+        cancelBulkTagBtn.disabled = true; // Disable cancel during processing
+
+        for (let i = 0; i < indicesToProcess.length; i++) {
+            const index = indicesToProcess[i];
+            const entry = imageEntries[index]; // Assume imageEntries holds the full data including base64 and id
+
+            if (!entry || !entry.id || !entry.base64Data) {
+                console.error(`Skipping index ${index}: Missing data.`);
+                errorCount++;
+                continue;
+            }
+
+            // --- Check if it's a PNG ---
+            // We need to infer type. Base64 data URLs start with 'data:image/png;base64,'
+            if (!entry.base64Data.startsWith('data:image/png;')) {
+                 console.log(`Skipping ${entry.name}: Not a PNG, cannot add tEXt metadata.`);
+                 errorCount++; // Count as error for now
+                 continue;
+            }
+
+            try {
+                // 1. Convert Base64 to Blob
+                const response = await fetch(entry.base64Data);
+                if (!response.ok) throw new Error(`Fetch failed (status: ${response.status})`);
+                const blob = await response.blob();
+                const originalFile = new File([blob], entry.name || 'image.png', { type: 'image/png' });
+
+                // 2. Read existing metadata (specifically Keywords)
+                const existingMetadata = await pngMetadata.readMetadata(originalFile);
+                const existingKeywords = (existingMetadata['Keywords'] || '').split(',')
+                                         .map(k => k.trim()).filter(k => k !== '');
+
+                // 3. Merge tags (avoid duplicates, case-insensitive check might be good)
+                const newKeywordsSet = new Set(existingKeywords.map(k => k.toLowerCase()));
+                tagsToAdd.forEach(tag => newKeywordsSet.add(tag.toLowerCase()));
+                const finalKeywords = Array.from(newKeywordsSet).join(', ');
+
+                // 4. Prepare metadata object to write
+                const metadataToWrite = { ...existingMetadata, 'Keywords': finalKeywords };
+
+                // 5. Write metadata back
+                const updatedBlob = await pngMetadata.writeMetadata(originalFile, metadataToWrite);
+
+                // 6. Convert updated Blob back to Base64
+                const updatedBase64Data = await blobToBase64(updatedBlob);
+
+                // 7. Update IndexedDB
+                const transaction = db.transaction([IMAGE_STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(IMAGE_STORE_NAME);
+                // Update the existing entry using its ID
+                const updatedEntry = { ...entry, base64Data: updatedBase64Data };
+                await new Promise((resolve, reject) => {
+                    const request = store.put(updatedEntry); // Use put to update based on keyPath 'id'
+                    request.onsuccess = resolve;
+                    request.onerror = () => reject(request.error);
+                });
+
+                // 8. Update in-memory array (important!)
+                imageEntries[index] = updatedEntry;
+                // 9. Update the cached keywords Set
+                imageEntries[index].keywords = await getKeywordsFromEntry(updatedEntry);
+
+                successCount++;
+                 showStatus(`Processing: ${i + 1}/${total}... (${successCount} success, ${errorCount} errors)`, 'info');
+
+            } catch (error) {
+                console.error(`Failed to process image ${entry.name} (index ${index}):`, error);
+                errorCount++;
+                 showStatus(`Processing: ${i + 1}/${total}... (${successCount} success, ${errorCount} errors)`, 'info');
+            }
+        }
+
+        // --- Finished Processing ---
+        applyBulkTagBtn.disabled = false;
+        applyBulkTagBtn.innerHTML = '<i class="fas fa-check"></i>Apply Tags';
+        cancelBulkTagBtn.disabled = false;
+
+        if (errorCount > 0) {
+             showStatus(`Finished applying tags. Success: ${successCount}, Errors: ${errorCount}`, 'error');
+        } else {
+             showStatus(`Successfully applied tags to ${successCount} image(s).`, 'success');
+        }
+
+        closeBulkTagModal();
+        // Deselect images after applying tags
+        selectedIndices.forEach(index => {
+            const thumb = galleryGrid.querySelector(`.thumbnail[data-index="${index}"]`);
+            if (thumb) thumb.classList.remove('selected');
+        });
+        selectedIndices = [];
+        updateSelectionUI(); // Update buttons to hide Tag Selected
+
+        // Optional: Redisplay the affected thumbnails if metadata is shown there?
+        // For now, the data is updated in IndexedDB and memory.
+    }
+    // --- Bulk Tag Modal Functions --- End
+
+    // Setup event listeners (Existing function, ensure bulk tag listeners are added)
+    function setupBulkTagListeners() {
+        // Ensure elements are available before adding listeners
+        // if (!tagSelectedBtn || !menuTagSelectedBtn || !closeBulkTagModalBtn || !cancelBulkTagBtn || !applyBulkTagBtn || !bulkTagInput) { // Modified check
+        if (!menuTagSelectedBtn || !closeBulkTagModalBtn || !cancelBulkTagBtn || !applyBulkTagBtn || !bulkTagInput) { // Check only for remaining/necessary elements
+            console.error("Bulk Tag Modal elements not found, cannot attach listeners.");
+            return;
+        }
+        // tagSelectedBtn.addEventListener('click', openBulkTagModal); // Removed from header
+        menuTagSelectedBtn.addEventListener('click', openBulkTagModal);
+        closeBulkTagModalBtn.addEventListener('click', closeBulkTagModal);
+        cancelBulkTagBtn.addEventListener('click', closeBulkTagModal);
+        applyBulkTagBtn.addEventListener('click', applyBulkTags);
+
+        // Optional: Close modal on Escape key
+        bulkTagModal.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeBulkTagModal();
+            }
+        });
+         // Optional: Trigger apply on Enter in input field
+        bulkTagInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                applyBulkTags();
+            }
+        });
+
+        // --- Download Selected Images Function --- Start
+        // if (!downloadSelectedBtn || !menuDownloadSelectedBtn) { // Modified check
+        if (!menuDownloadSelectedBtn) { // Check only for remaining/necessary elements
+            console.error("Download Selected button elements not found, cannot attach listeners.");
+            return;
+        }
+        // downloadSelectedBtn.addEventListener('click', downloadSelectedImages); // Removed from header
+        menuDownloadSelectedBtn.addEventListener('click', downloadSelectedImages);
+        // --- Download Selected Images Function --- End
+    }
+
+    // --- Download Selected Images Function --- Start
+    function downloadSelectedImages() {
+        if (selectedIndices.length === 0) {
+            showStatus('No images selected to download.', 'info');
+            return;
+        }
+
+        const indicesToDownload = [...selectedIndices]; // Copy selected indices
+        const total = indicesToDownload.length;
+        showStatus(`Starting download for ${total} selected image(s)...`, 'info');
+
+        indicesToDownload.forEach((index, i) => {
+            const entry = imageEntries[index];
+            if (!entry || !entry.base64Data || !entry.name) {
+                console.error(`Skipping download for index ${index}: Missing data.`);
+                showStatus(`Skipping download for one image: Missing data. (${i + 1}/${total})`, 'error');
+                return; // Skip this one
+            }
+
+            // Use a slight delay for each download trigger if needed, but often not required
+            // setTimeout(() => {
+                try {
+                    const link = document.createElement('a');
+                    link.href = entry.base64Data;
+                    link.download = entry.name;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    console.log(`Download triggered for: ${entry.name}`);
+                } catch (error) {
+                    console.error(`Error triggering download for ${entry.name}:`, error);
+                    showStatus(`Error downloading ${entry.name}: ${error.message}`, 'error');
+                }
+            // }, i * 100); // Example: 100ms delay between each download trigger
+        });
+
+        // Deselect after triggering downloads
+        // selectedIndices.forEach(index => {
+        //     const thumb = galleryGrid.querySelector(`.thumbnail[data-index="${index}"]`);
+        //     if (thumb) thumb.classList.remove('selected');
+        // });
+        // selectedIndices = [];
+        // updateSelectionUI();
+        // Decide if you want to automatically deselect after downloading
+    }
+    // --- Download Selected Images Function --- End
+
+    // --- Tag List Display --- Start
+
+    // Helper to get keywords Set from an image entry (Moved higher)
+    async function getKeywordsFromEntry(entry) {
+        const keywords = new Set();
+        if (entry && entry.base64Data && entry.base64Data.startsWith('data:image/png;')) {
+            try {
+                const response = await fetch(entry.base64Data);
+                if (!response.ok) throw new Error('Fetch failed');
+                const blob = await response.blob();
+                const tempFile = new File([blob], entry.name || 'image.png', { type: 'image/png' });
+                const metadata = await pngMetadata.readMetadata(tempFile);
+                const keywordsString = metadata['Keywords'] || '';
+                keywordsString.split(',')
+                    .map(k => k.trim().toLowerCase())
+                    .filter(k => k !== '')
+                    .forEach(tag => keywords.add(tag));
+            } catch (error) {
+                console.warn(`[getKeywordsFromEntry] Failed for ${entry.name}:`, error);
+            }
+        }
+        return keywords;
+    }
+
+    async function updateTagListDisplay() {
+        console.log("--- updateTagListDisplay START ---");
+        const tagListContainer = document.getElementById('tagListContainer');
+        const tagsMenuSection = document.getElementById('tagsMenuSection');
+        if (!tagListContainer || !tagsMenuSection) {
+             console.error("Tag list container or section not found.");
+             return;
+        }
+
+        // Show loading state initially
+        tagListContainer.innerHTML = '<span style="color: #909090; font-size: 12px; width: 100%;">Loading tags...</span>';
+        tagsMenuSection.style.display = 'block'; // Ensure section is visible
+
+        const allTags = new Set();
+        let pngCount = 0;
+
+        // Now uses the cached keywords
+        for (const entry of imageEntries) {
+            if (entry && entry.keywords) { // Check if keywords Set exists
+                if (entry.base64Data && entry.base64Data.startsWith('data:image/png;')) {
+                    pngCount++;
+                }
+                entry.keywords.forEach(tag => allTags.add(tag)); // Add directly from Set
+            }
+        }
+        console.log(`[Tag List] Using cached keywords. Found ${allTags.size} unique tags from ${pngCount} PNGs.`);
+
+        // Clear loading/previous content
+        tagListContainer.innerHTML = '';
+
+        if (allTags.size === 0) {
+            if (pngCount === 0) {
+                 tagListContainer.innerHTML = '<span style="color: #909090; font-size: 12px; width: 100%;">No PNG images found.</span>';
+            } else {
+                 tagListContainer.innerHTML = '<span style="color: #909090; font-size: 12px; width: 100%;">No tags found in PNG images.</span>';
+            }
+            // Optionally hide the whole section if no tags:
+            // tagsMenuSection.style.display = 'none';
+        } else {
+            const sortedTags = Array.from(allTags).sort();
+            console.log(`[Tag List] Displaying ${sortedTags.length} unique tags:`, sortedTags);
+
+            sortedTags.forEach(tag => {
+                const tagElement = document.createElement('button');
+                tagElement.className = ''; // Remove base class
+                const tagName = tag; // Already lowercase from Set
+                tagElement.textContent = tagName;
+                tagElement.style.cssText = `
+                    display: inline-block;
+                    background: rgba(97, 97, 97, 0.6);
+                    color: #e0e0e0;
+                    border: 1px solid ${selectedFilterTags.has(tagName) ? '#4CAF50' : 'rgba(255, 255, 255, 0.1)'}; /* Highlight border if selected */
+                    border-radius: 12px;
+                    padding: 4px 10px;
+                    font-size: 11px;
+                    margin: 2px;
+                    cursor: pointer; /* Make clickable */
+                    text-transform: none;
+                    transition: all 0.2s ease;
+                    width: auto;
+                    text-align: left;
+                    box-shadow: none;
+                    opacity: ${selectedFilterTags.size === 0 || selectedFilterTags.has(tagName) ? '1' : '0.6'}; /* Dim if not selected when filters active */
+                `;
+                // Update hover effect slightly
+                const baseBg = selectedFilterTags.has(tagName) ? 'rgba(76, 175, 80, 0.6)' : 'rgba(97, 97, 97, 0.6)';
+                const hoverBg = selectedFilterTags.has(tagName) ? 'rgba(76, 175, 80, 0.8)' : 'rgba(117, 117, 117, 0.7)';
+                tagElement.style.background = baseBg;
+                tagElement.onmouseover = () => { tagElement.style.background = hoverBg; };
+                tagElement.onmouseout = () => { tagElement.style.background = baseBg; };
+
+                // Add click listener for filtering
+                tagElement.onclick = (event) => { // Add event parameter
+                    event.stopPropagation(); // Stop the click from bubbling up
+                    toggleTagFilter(tagName);
+                };
+                tagListContainer.appendChild(tagElement);
+            });
+        }
+        console.log("--- updateTagListDisplay END ---");
+    }
+
+    // --- Tag List Display --- End
+
+    // --- Tag Filtering Logic --- Start
+    function toggleTagFilter(tag) {
+        console.log(`Toggling filter for tag: ${tag}`);
+        if (selectedFilterTags.has(tag)) {
+            selectedFilterTags.delete(tag);
+        } else {
+            selectedFilterTags.add(tag);
+        }
+        updateTagListDisplay(); // Update button styles
+        displayImages(); // Re-render gallery with new filters
+    }
+    // --- Tag Filtering Logic --- End
+
+    // Setup event listeners (Existing function)
     </script>
 </body>
 </html> 
