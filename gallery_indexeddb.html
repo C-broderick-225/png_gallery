@@ -775,6 +775,160 @@
              box-shadow: 0 0 15px rgba(76, 175, 80, 0.5), 0 8px 24px rgba(0, 0, 0, 0.3);
              border-color: #4CAF50;
         }
+
+        /* Drag and drop styles */
+        .thumbnail.dragging {
+            opacity: 0.5;
+            border: 2px dashed #e0e0e0;
+        }
+
+        .thumbnail.drag-over-element {
+            /* Add a visual indicator for the drop target */
+            /* Example: slightly scale up or add a border */
+            transform: scale(1.03);
+            border: 2px solid #4CAF50; /* Reuse selection color */
+            transition: transform 0.1s ease-in-out, border 0.1s ease-in-out;
+        }
+
+        /* Select Mode Styles */
+        .select-mode-header {
+            display: none;
+            position: fixed;
+            top: 60px;
+            left: 0;
+            right: 0;
+            background: rgba(45, 45, 45, 0.9);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 10px 20px;
+            z-index: 1000;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .select-mode-header span {
+            color: #e0e0e0;
+            font-size: 14px;
+        }
+
+        .select-mode-header button {
+            background: rgba(66, 66, 66, 0.6);
+            color: #e0e0e0;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 15px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .select-mode-header button:hover {
+            background: rgba(97, 97, 97, 0.7);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .select-mode-header button i {
+            font-size: 16px;
+            color: #909090;
+            transition: color 0.2s ease;
+        }
+
+        .select-mode-header button:hover i {
+            color: #e0e0e0;
+        }
+
+        body.select-mode-active .select-mode-header {
+            display: flex;
+        }
+
+        .thumbnail-checkbox-overlay {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: #4CAF50;
+        }
+
+        .thumbnail.selected .thumbnail-checkbox-overlay {
+            display: flex;
+        }
+
+        body.select-mode-active .thumbnail-checkbox-overlay {
+            display: flex;
+        }
+
+        /* Select Mode Styles */
+        #selectModeHeader {
+            display: none; /* Hidden by default */
+            position: fixed;
+            top: 60px; /* Below main header */
+            left: 0;
+            right: 0;
+            height: 50px;
+            background: rgba(76, 175, 80, 0.8); /* Greenish to indicate selection */
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            z-index: 998; /* Below main header, above content */
+            padding: 0 20px;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            color: #ffffff;
+        }
+        body.select-mode-active #selectModeHeader {
+            display: flex; /* Show when select mode is active */
+        }
+        #selectModeHeader .select-mode-controls button {
+            background: rgba(255, 255, 255, 0.2);
+            color: #ffffff;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+        #selectModeHeader .select-mode-controls button:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        .thumbnail-checkbox-overlay {
+            display: none; /* Hidden by default */
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 24px;
+            height: 24px;
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 50%;
+            color: white;
+            font-size: 14px;
+            justify-content: center;
+            align-items: center;
+            z-index: 2; /* Above image */
+            pointer-events: none; /* Pass clicks through */
+        }
+        body.select-mode-active .thumbnail-checkbox-overlay {
+            display: flex; /* Show checkboxes in select mode */
+        }
+        .thumbnail.selected .thumbnail-checkbox-overlay i.fa-check-circle {
+            /* Style for the selected checkmark itself if needed */
+            color: #4CAF50; /* Match border */
+        }
     </style>
 </head>
 <body>
@@ -796,7 +950,7 @@
         <div class="menu-section">
             <h3>Gallery</h3>
             <div class="menu-buttons">
-                <button id="menuSelectFolderBtn"><i class="fas fa-folder-open"></i>Select Folder</button>
+                <button id="menuSelectFolderBtn"><i class="fas fa-folder-open"></i>Add Folder</button> <!-- Changed text -->
                 <button id="menuAddFilesBtn"><i class="fas fa-plus"></i>Add Files</button>
                 <button id="menuClearGalleryBtn"><i class="fas fa-trash"></i>Clear Gallery</button>
                 <button id="menuReloadBtn"><i class="fas fa-sync"></i>Reload</button>
@@ -830,6 +984,15 @@
                 <input type="range" id="thumbnailSize" min="150" max="400" value="250" step="10">
                 <span id="sizeValue">250px</span>
             </div>
+        </div>
+    </div>
+
+    <!-- Select Mode Header (hidden by default) -->
+    <div id="selectModeHeader">
+        <span id="selectModeCount">0 items selected</span>
+        <div class="select-mode-controls">
+            <button id="selectAllBtn">Select All</button>
+            <button id="cancelSelectModeBtn">Cancel</button>
         </div>
     </div>
 
@@ -1084,11 +1247,16 @@
     // Global variables
     let db = null;
     let currentImageIndex = -1;
-    let imageEntries = [];
+    let imageEntries = []; // This array will be reordered by drag/drop
     let originalOrder = [];
     let selectedIndices = []; // Added for multi-select
     let selectedFilterTags = new Set(); // Added for tag filtering
     let loadingToastId = null; // Added to track the loading status toast
+    let draggedIndex = null; // Store the index of the item being dragged
+
+    // --- Selection Mode State ---
+    let isSelectModeActive = false;
+    let lastSelectedIndex = null;
 
     // --- Bulk Tag Modal Elements & References --- Start
     let bulkTagModal, bulkTagInput, applyBulkTagBtn, cancelBulkTagBtn, closeBulkTagModalBtn, tagSelectedBtn, menuTagSelectedBtn;
@@ -1510,19 +1678,34 @@
         imagesToDisplay.forEach((entry) => {
             // Need the original index for selection handling
             const originalIndex = imageEntries.findIndex(e => e.id === entry.id);
-            if (originalIndex === -1) return; // Should not happen
+            if (originalIndex === -1) {
+                 console.warn(`Could not find original index for entry id: ${entry.id}, name: ${entry.name}`);
+                 return; // Skip if index not found
+            }
 
             const thumbnail = createThumbnail(entry, originalIndex);
             galleryGrid.appendChild(thumbnail);
         });
+        // Add grid-level listeners after thumbnails are added
+        galleryGrid.addEventListener('dragover', handleDragOver);
+        galleryGrid.addEventListener('drop', handleDrop);
     }
 
     // Create thumbnail element
     function createThumbnail(entry, index) {
+        let longPressTimer;
+        let isLongPress = false;
+        const longPressDuration = 500; // 500ms for long press
+
         const thumbnail = document.createElement('div');
         thumbnail.className = 'thumbnail';
         thumbnail.dataset.index = index; // Add index attribute for easy selection later
+        thumbnail.draggable = true; // Make the thumbnail draggable
         thumbnail.innerHTML = `
+            <div class="thumbnail-checkbox-overlay">
+                <i class="far fa-circle"></i> <!-- Default empty circle -->
+            </div>
+            <span class="drag-handle" style="position: absolute; top: 5px; left: 5px; cursor: grab; color: rgba(255,255,255,0.3); font-size: 14px; z-index: 1;"><i class="fas fa-grip-vertical"></i></span>
             <img src="${entry.base64Data}" alt="${entry.name}" class="thumbnail-img">
             <div class="thumbnail-info">
                 <div>${entry.name}</div>
@@ -1530,15 +1713,101 @@
             </div>
         `;
 
-        // Update the click listener for selection
+        // --- Unified Click/Tap Handler --- 
         thumbnail.addEventListener('click', (event) => {
-            if (event.ctrlKey || event.metaKey) { // Check for Ctrl or Cmd key
-                toggleSelection(index);
-            } else {
-                // Only show full image on a simple click (no modifier keys)
-                showFullImage(index);
+            // Prevent default if drag handle is clicked
+            console.log('[Click Event] Fired. isLongPress:', isLongPress);
+            // Prevent triggering selection/modal if clicking the drag handle
+            if (event.target.closest('.drag-handle')) {
+                 console.log('[Click Event] Ignored: Drag handle clicked.');
+                 return;
             }
+            
+            // If a long press was detected and handled selection, reset the flag and do nothing further on click
+            if (isLongPress) {
+                console.log('[Click Event] Ignored: Long press detected.');
+                isLongPress = false; // Reset for next interaction
+                return;
+            }
+
+            // --- Click Logic based on Select Mode ---
+            if (isSelectModeActive) {
+                // In select mode, clicks toggle selection (Shift+Click handled separately for range)
+                if (event.shiftKey) {
+                    console.log('[Click Event - Select Mode] Shift key detected. Performing range selection.');
+                    performRangeSelection(index);
+                } else {
+                    console.log('[Click Event - Select Mode] Toggling selection.');
+                    toggleSelection(index);
+                }
+            } else {
+                // Not in select mode
+                if (event.ctrlKey || event.metaKey) {
+                    console.log('[Click Event - Normal Mode] Ctrl/Meta key detected. Entering Select Mode and selecting.');
+                    // Enter select mode AND select this item
+                    enterSelectMode(); // Enter the mode first
+                    toggleSelection(index); // Then ensure this item is selected
+                } else {
+                    console.log('[Click Event - Normal Mode] Showing full image.');
+                    // Simple click opens the modal
+                    showFullImage(index);
+                }
+            }
+            // --- End Click Logic ---
         });
+
+        // --- Long Press / Touch Handling ---
+        thumbnail.addEventListener('touchstart', (event) => {
+             // Prevent triggering if multiple fingers are used (e.g., pinch zoom)
+             if (event.touches.length > 1) {
+                 clearTimeout(longPressTimer);
+                 return;
+             }
+             console.log('[Touch Start]');
+             isLongPress = false; // Reset flag
+             // Start the timer for long press detection
+             longPressTimer = setTimeout(() => {
+                 console.log('[Long Press Timer] Fired.');
+                  isLongPress = true;
+                  // Action: Enter select mode if not already active, then toggle selection
+                  if (!isSelectModeActive) {
+                      console.log('[Long Press] Entering select mode and selecting.');
+                      enterSelectMode();
+                  }
+                  console.log('[Long Press] Toggling selection.');
+                  toggleSelection(index); // Always toggle the item on long press
+             }, longPressDuration);
+             // Prevent default context menu on long press
+             thumbnail.addEventListener('contextmenu', preventContextMenu);
+        });
+
+        thumbnail.addEventListener('touchend', () => {
+            console.log('[Touch End]');
+            clearTimeout(longPressTimer); // Clear timer on touch end
+            // Remove context menu prevention after interaction ends
+            thumbnail.removeEventListener('contextmenu', preventContextMenu);
+        });
+
+        thumbnail.addEventListener('touchmove', () => {
+             // Clear timer if finger moves significantly (prevents triggering during scroll)
+             console.log('[Touch Move] Clearing long press timer.');
+             clearTimeout(longPressTimer);
+             // Optionally remove context menu prevention here too if needed
+             thumbnail.removeEventListener('contextmenu', preventContextMenu);
+        });
+
+        // Helper to prevent context menu
+        const preventContextMenu = (e) => {
+             console.log('[Context Menu] Prevented.');
+             e.preventDefault();
+        };
+
+        // --- Add Drag and Drop Event Listeners ---
+        thumbnail.addEventListener('dragstart', handleDragStart);
+        thumbnail.addEventListener('dragend', handleDragEnd);
+        // Add dragenter/dragleave directly to thumbnails for visual feedback on the target
+        thumbnail.addEventListener('dragenter', handleDragEnter);
+        thumbnail.addEventListener('dragleave', handleDragLeave);
 
         // Apply selected class if this index is already selected (e.g., after reload/redisplay)
         if (selectedIndices.includes(index)) {
@@ -1548,11 +1817,101 @@
         return thumbnail;
     }
 
+    // --- Drag and Drop Handlers ---
+    function handleDragStart(e) {
+        // Check if the drag started on the handle (optional, could allow dragging anywhere on thumb)
+        // if (!e.target.classList.contains('drag-handle')) {
+        //     e.preventDefault();
+        //     return;
+        // }
+        draggedIndex = parseInt(this.dataset.index);
+        this.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        // Optional: Set data transfer data if needed elsewhere, though index is stored globally here
+        // e.dataTransfer.setData('text/plain', draggedIndex);
+        console.log(`Drag Start - Index: ${draggedIndex}`);
+    }
+
+    function handleDragEnd(e) {
+        this.classList.remove('dragging');
+        // Clear any lingering drag-over styles
+        document.querySelectorAll('.thumbnail.drag-over-element').forEach(el => el.classList.remove('drag-over-element'));
+        console.log(`Drag End - Index: ${draggedIndex}`);
+        draggedIndex = null; // Reset dragged index
+    }
+
+    function handleDragOver(e) {
+        e.preventDefault(); // Necessary to allow dropping
+        e.dataTransfer.dropEffect = 'move';
+    }
+
+    function handleDragEnter(e) {
+        e.preventDefault();
+        // Add visual cue to the potential drop target element (not the grid itself)
+        if (this.dataset.index !== draggedIndex?.toString()) { // Don't highlight the dragged item itself
+            this.classList.add('drag-over-element');
+        }
+    }
+
+    function handleDragLeave(e) {
+        e.preventDefault();
+        // Remove visual cue when dragging leaves the element
+        if (e.target === this) { // Only remove if leaving the element itself, not its children
+            this.classList.remove('drag-over-element');
+        }
+    }
+
+    function handleDrop(e) {
+        e.preventDefault();
+        e.stopPropagation(); // Prevent event from bubbling up
+
+        const targetElement = e.target.closest('.thumbnail');
+        if (!targetElement || draggedIndex === null) {
+             console.log('Drop event on invalid target or no dragged item.');
+             // Ensure drag-over style is removed if drop fails early
+             document.querySelectorAll('.thumbnail.drag-over-element').forEach(el => el.classList.remove('drag-over-element'));
+             return;
+        }
+
+        const targetIndex = parseInt(targetElement.dataset.index);
+        targetElement.classList.remove('drag-over-element'); // Remove highlight from drop target
+
+        if (targetIndex === draggedIndex) {
+             console.log('Dropped onto itself.');
+             return; // No change if dropped onto itself
+        }
+
+        console.log(`Drop - Dragged Index: ${draggedIndex}, Target Index: ${targetIndex}`);
+
+        // Reorder the imageEntries array
+        const draggedItem = imageEntries.splice(draggedIndex, 1)[0];
+        imageEntries.splice(targetIndex, 0, draggedItem);
+
+        // Re-render the gallery with the new order
+        displayImages();
+
+        showStatus('Gallery order updated (in memory)', 'success');
+    }
+
     // Function to handle toggling selection state
     function toggleSelection(index) {
         const thumbnailElement = galleryGrid.querySelector(`.thumbnail[data-index="${index}"]`);
         if (!thumbnailElement) return; // Should not happen
 
+        // If entering select mode for the first time via long press or Ctrl+click,
+        // ensure the mode is active.
+        if (!isSelectModeActive) {
+            enterSelectMode();
+            // Need to ensure the item causing entry is selected
+            if (!selectedIndices.includes(index)) {
+                selectedIndices.push(index);
+            }
+            lastSelectedIndex = index; // Set initial last selected
+            updateSelectionUI();
+            return; // Enter mode handles the first selection
+        }
+
+        // If already in select mode, toggle normally
         const selectedIndexPosition = selectedIndices.indexOf(index);
         if (selectedIndexPosition > -1) {
             // Already selected, so deselect
@@ -1564,6 +1923,10 @@
             thumbnailElement.classList.add('selected');
         }
         console.log('Selected indices:', selectedIndices); // For debugging
+
+        // Update last selected index *only when selecting* in select mode
+        lastSelectedIndex = selectedIndices.includes(index) ? index : null;
+
         // Update UI elements that depend on selection
         updateSelectionUI();
     }
@@ -1576,6 +1939,7 @@
         // const selectionCountDLSpan = document.getElementById('selectionCountDL'); // Span removed from header
         const menuSelectionCountDLSpan = document.getElementById('menuSelectionCountDL');
 
+        // Update hamburger menu button visibility/count
         if (count > 0) {
             // tagSelectedBtn.style.display = 'flex'; // Button removed from header
             menuTagSelectedBtn.style.display = 'flex';
@@ -1595,6 +1959,24 @@
             // selectionCountDLSpan.textContent = '0'; // Span removed from header
             menuSelectionCountDLSpan.textContent = '0';
         }
+
+        // Update Select Mode header count (if active)
+        if (isSelectModeActive) {
+            const selectModeCountSpan = document.getElementById('selectModeCount');
+            selectModeCountSpan.textContent = `${count} item${count !== 1 ? 's' : ''} selected`;
+        }
+        
+        // Update checkbox appearance for all visible items based on selection
+        galleryGrid.querySelectorAll('.thumbnail').forEach(thumb => {
+            const index = parseInt(thumb.dataset.index);
+            const checkbox = thumb.querySelector('.thumbnail-checkbox-overlay i');
+            if (checkbox) {
+                const isSelected = selectedIndices.includes(index);
+                checkbox.className = isSelected ? 'fas fa-check-circle' : 'far fa-circle';
+                // Ensure parent thumbnail also has 'selected' class consistent
+                 thumb.classList.toggle('selected', isSelected);
+            }
+        });
     }
 
     // Show full image in modal
@@ -1784,10 +2166,26 @@
     function setupEventListeners() {
         console.log('Setting up event listeners...');
 
+        // Select Mode Header Buttons
+        document.getElementById('selectAllBtn').addEventListener('click', selectAll);
+        document.getElementById('cancelSelectModeBtn').addEventListener('click', exitSelectMode);
+
         // File selection handling
         const handleFileSelect = () => {
             console.log('File select button clicked');
             fileInput.click();
+        };
+
+        // Folder selection handling
+        const handleFolderSelect = () => {
+            console.log('Folder select button clicked');
+            if (hasDirectorySupport) {
+                directoryInput.click();
+            } else {
+                showStatus('Folder selection is not supported by your browser.', 'info');
+                // Fallback to file selection? Or just inform the user.
+                // fileInput.click(); // Example fallback
+            }
         };
 
         // Clear gallery handling
@@ -1821,8 +2219,8 @@
         // reloadBtn.addEventListener('click', handleReload);
 
         // Menu buttons
-        document.getElementById('menuSelectFolderBtn').addEventListener('click', handleFileSelect);
-        document.getElementById('menuAddFilesBtn').addEventListener('click', handleFileSelect);
+        document.getElementById('menuSelectFolderBtn').addEventListener('click', handleFolderSelect); // Changed listener
+        document.getElementById('menuAddFilesBtn').addEventListener('click', handleFileSelect); // Kept listener
         document.getElementById('menuClearGalleryBtn').addEventListener('click', handleClearGallery);
         document.getElementById('menuReloadBtn').addEventListener('click', handleReload);
 
@@ -1833,6 +2231,15 @@
             console.log('Selected files:', files.map(f => ({ name: f.name, type: f.type, size: f.size })));
             handleFiles(files);
             fileInput.value = ''; // Reset input
+        });
+
+        // Directory input handling (NEW)
+        directoryInput.addEventListener('change', (e) => {
+            console.log('Directory input change event triggered');
+            const files = Array.from(e.target.files || []);
+            console.log('Selected files from directory:', files.map(f => ({ name: f.name, type: f.type, size: f.size, relativePath: f.webkitRelativePath })));
+            handleFiles(files);
+            directoryInput.value = ''; // Reset input
         });
 
         // Drag and drop handling
@@ -2014,8 +2421,9 @@
 
     // Update button text to reflect actual functionality
     function updateButtonText() {
-        // selectFolderBtn.innerHTML = '<i class="fas fa-images"></i>Select Images'; // Removed from header
-        document.getElementById('menuSelectFolderBtn').innerHTML = '<i class="fas fa-images"></i>Select Images';
+        // No longer needed as the menu button text is set directly in HTML
+        // and the specific handlers are attached.
+        // If we need dynamic text changes later, we can add them here.
     }
 
     // Initialize metadata editor related event listeners
@@ -2682,6 +3090,76 @@
     // --- Tag Filtering Logic --- End
 
     // Setup event listeners (Existing function)
+
+    // --- Select Mode Management ---
+    function enterSelectMode() {
+        if (isSelectModeActive) return; // Already active
+        console.log('Entering Select Mode');
+        isSelectModeActive = true;
+        document.body.classList.add('select-mode-active');
+        // Disable dragging when select mode is active to prevent conflicts
+        galleryGrid.querySelectorAll('.thumbnail').forEach(thumb => thumb.draggable = false);
+        updateSelectionUI(); // Update header count immediately
+    }
+
+    function exitSelectMode() {
+        if (!isSelectModeActive) return; // Already inactive
+        console.log('Exiting Select Mode');
+        isSelectModeActive = false;
+        document.body.classList.remove('select-mode-active');
+        // Re-enable dragging when exiting select mode
+        galleryGrid.querySelectorAll('.thumbnail').forEach(thumb => thumb.draggable = true);
+        // Clear selection when exiting mode
+        selectedIndices = [];
+        lastSelectedIndex = null;
+        updateSelectionUI();
+    }
+
+    function selectAll() {
+        if (!isSelectModeActive) return;
+        console.log('Select All triggered');
+        // Select all *currently displayed* images
+        selectedIndices = []; // Start fresh
+        galleryGrid.querySelectorAll('.thumbnail').forEach(thumb => {
+            const index = parseInt(thumb.dataset.index);
+            if (!isNaN(index)) { // Ensure index is valid
+                 selectedIndices.push(index);
+            }
+        });
+        lastSelectedIndex = selectedIndices.length > 0 ? selectedIndices[selectedIndices.length - 1] : null;
+        updateSelectionUI();
+    }
+
+    function performRangeSelection(clickedIndex) {
+        if (!isSelectModeActive || lastSelectedIndex === null || lastSelectedIndex === clickedIndex) {
+            // If no previous selection, just toggle the clicked one
+             toggleSelection(clickedIndex);
+             return;
+         }
+        console.log(`Performing range selection from ${lastSelectedIndex} to ${clickedIndex}`);
+
+        const minIndex = Math.min(lastSelectedIndex, clickedIndex);
+        const maxIndex = Math.max(lastSelectedIndex, clickedIndex);
+
+        // Find all *visible* thumbnail indices between min and max (inclusive)
+        const visibleIndices = Array.from(galleryGrid.querySelectorAll('.thumbnail')).map(thumb => parseInt(thumb.dataset.index));
+        
+        // Select items within the range
+        for (let i = 0; i < imageEntries.length; i++) {
+             // Check if the entry's index is within the range AND is currently visible
+             if (i >= minIndex && i <= maxIndex && visibleIndices.includes(i)) {
+                 if (!selectedIndices.includes(i)) {
+                     selectedIndices.push(i);
+                 }
+             }
+         }
+
+        // The item shift-clicked becomes the new anchor for subsequent range selects
+        // Although standard behavior usually keeps the original anchor. Let's stick with updating.
+        // lastSelectedIndex = clickedIndex; // We might reconsider this - usually the *first* click sets the anchor.
+
+        updateSelectionUI();
+    }
     </script>
 </body>
 </html> 
