@@ -171,6 +171,16 @@
             border-radius: 12px;
         }
         
+        .thumbnail-img.lazy-load {
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            background: linear-gradient(145deg, #1a1a1a, #151515) center center no-repeat;
+        }
+
+        .thumbnail-img:not(.lazy-load) {
+            opacity: 1;
+        }
+        
         .thumbnail:hover .thumbnail-img {
             transform: scale(1.08);
         }
@@ -228,6 +238,8 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            /* Remove overflow hidden to allow zoomed image to extend beyond container */
+            overflow: visible;
         }
 
         .modal-image {
@@ -236,8 +248,29 @@
             object-fit: contain;
             border-radius: 8px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            transition: transform 0.3s ease;
+            cursor: zoom-in;
+            /* Add position relative as a base for zooming */
+            position: relative;
         }
 
+        .modal-image.zoomed-fit {
+            transform: scale(1.5);
+            cursor: zoom-in;
+            /* Make sure zoomed image appears above other elements */
+            z-index: 1010;
+        }
+
+        .modal-image.zoomed-full {
+            transform: scale(2);
+            cursor: zoom-out;
+            /* Make sure zoomed image appears above other elements */
+            z-index: 1010;
+            /* Remove any constraints when zoomed to full size */
+            max-height: none;
+            max-width: none;
+        }
+        
         .modal-controls {
             position: fixed;
             bottom: 20px;
@@ -1401,7 +1434,7 @@
         }
     }
 
-    // Handle file selection with debugging
+    // Handle file selection with debugging and batch processing
     async function handleFiles(files) {
         console.log('Handling files:', files);
         console.log('Number of files:', files.length);
@@ -1418,96 +1451,99 @@
             let errorCount = 0;
             let processedCount = 0;
             const totalFiles = files.length;
+            const BATCH_SIZE = 5; // Process files in smaller batches
+
+            // Helper function to process a batch of files - moved to the top of the function
+            async function processBatch(batchFiles) {
+                for (const file of batchFiles) {
+                    processedCount++;
+                    let skipReason = null;
+                    try {
+                        console.log('Processing file:', file.name, 'Type:', file.type, 'Size:', file.size);
+                        
+                        // --- Start Validation ---
+                        // 1. Type validation
+                        if (!ALLOWED_TYPES.includes(file.type)) {
+                            skipReason = `Unsupported file type (${file.type})`;
+                        }
+                        // 2. Size validation
+                        else if (file.size > MAX_FILE_SIZE) {
+                            skipReason = `File too large (${formatFileSize(file.size)}, max ${formatFileSize(MAX_FILE_SIZE)})`;
+                        }
+                        // 3. Dimension validation (Requires loading the image)
+                        else {
+                            const dimensions = await getImageDimensions(file);
+                            if (dimensions.width > MAX_DIMENSION || dimensions.height > MAX_DIMENSION) {
+                                skipReason = `Image dimensions too large (${dimensions.width}x${dimensions.height}, max ${MAX_DIMENSION}x${MAX_DIMENSION})`;
+                            }
+                        }
+                        // --- End Validation ---
+
+                        if (skipReason) {
+                            console.log(`Skipping ${file.name}: ${skipReason}`);
+                            showStatus(`Skipped ${file.name}: ${skipReason}`, 'info');
+                            skippedCount++;
+                            continue; // Skip to the next file
+                        }
+
+                        // Simple file reading approach (only if validation passes)
+                        const reader = new FileReader();
+                        await new Promise((resolve, reject) => {
+                            reader.onload = async () => {
+                                try {
+                                    console.log('File read successfully:', file.name);
+                                    const entry = {
+                                        name: file.name,
+                                        size: formatFileSize(file.size),
+                                        type: file.type,
+                                        timestamp: new Date().toISOString(),
+                                        base64Data: reader.result
+                                    };
+
+                                    const transaction = db.transaction([IMAGE_STORE_NAME], 'readwrite');
+                                    const store = transaction.objectStore(IMAGE_STORE_NAME);
+                                    await new Promise((res, rej) => {
+                                        const request = store.add(entry);
+                                        request.onsuccess = () => {
+                                            console.log('File added to DB:', file.name);
+                                            res();
+                                        };
+                                        request.onerror = () => rej(request.error);
+                                    });
+
+                                    successCount++;
+                                    console.log('File processed successfully:', file.name);
+                                } catch (dbError) {
+                                    console.error('Error adding file to DB:', file.name, dbError);
+                                    reject(dbError); // Reject the outer promise for this file
+                                }
+                                resolve(); // Resolve the reader promise
+                            };
+                            reader.onerror = (readError) => {
+                                console.error('Error reading file:', file.name, readError);
+                                reject(reader.error); // Reject the outer promise for this file
+                            };
+                            reader.readAsDataURL(file);
+                        }); // End of reader promise
+
+                    } catch (error) {
+                        console.error(`Failed to process ${file.name}:`, error);
+                        showStatus(`Failed to process ${file.name}: ${error.message}`, 'error'); // Keep individual error toasts
+                        errorCount++;
+                    }
+                }
+            }
 
             // Start persistent loading toast
             loadingToastId = showStatus(`Processing ${totalFiles} files...`, 'info', { persistent: true, showSpinner: true });
-            console.log(`Starting to process ${totalFiles} files`);
+            console.log(`Starting to process ${totalFiles} files in batches of ${BATCH_SIZE}`);
 
-            for (const file of files) {
-                processedCount++;
-                let skipReason = null;
-                try {
-                    console.log('Processing file:', file.name, 'Type:', file.type, 'Size:', file.size);
-                    
-                    // --- Start Validation ---
-                    // 1. Type validation
-                    if (!ALLOWED_TYPES.includes(file.type)) {
-                        skipReason = `Unsupported file type (${file.type})`;
-                    }
-                    // 2. Size validation
-                    else if (file.size > MAX_FILE_SIZE) {
-                        skipReason = `File too large (${formatFileSize(file.size)}, max ${formatFileSize(MAX_FILE_SIZE)})`;
-                    }
-                    // 3. Dimension validation (Requires loading the image)
-                    else {
-                        const dimensions = await getImageDimensions(file);
-                        if (dimensions.width > MAX_DIMENSION || dimensions.height > MAX_DIMENSION) {
-                            skipReason = `Image dimensions too large (${dimensions.width}x${dimensions.height}, max ${MAX_DIMENSION}x${MAX_DIMENSION})`;
-                        }
-                    }
-                    // --- End Validation ---
-
-                    if (skipReason) {
-                        console.log(`Skipping ${file.name}: ${skipReason}`);
-                        showStatus(`Skipped ${file.name}: ${skipReason}`, 'info');
-                        skippedCount++;
-                        // Update progress immediately after a skip
-                        showStatus(
-                            `Processing: ${processedCount}/${totalFiles} files (${successCount} added, ${skippedCount} skipped, ${errorCount} errors)`, 
-                            'info',
-                            { id: loadingToastId, persistent: true, showSpinner: true }
-                        );
-                        continue; // Skip to the next file
-                    }
-
-                    // Simple file reading approach (only if validation passes)
-                    const reader = new FileReader();
-                    await new Promise((resolve, reject) => {
-                        reader.onload = async () => {
-                            try {
-                                console.log('File read successfully:', file.name);
-                                const entry = {
-                                    name: file.name,
-                                    size: formatFileSize(file.size),
-                                    type: file.type,
-                                    timestamp: new Date().toISOString(),
-                                    base64Data: reader.result
-                                };
-
-                                const transaction = db.transaction([IMAGE_STORE_NAME], 'readwrite');
-                                const store = transaction.objectStore(IMAGE_STORE_NAME);
-                                await new Promise((res, rej) => {
-                                    const request = store.add(entry);
-                                    request.onsuccess = () => {
-                                        console.log('File added to DB:', file.name);
-                                        res();
-                                    };
-                                    request.onerror = () => rej(request.error);
-                                });
-
-                                successCount++;
-                                console.log('File processed successfully:', file.name);
-                            } catch (dbError) {
-                                console.error('Error adding file to DB:', file.name, dbError);
-                                reject(dbError); // Reject the outer promise for this file
-                            }
-                            resolve(); // Resolve the reader promise
-                        };
-                        reader.onerror = (readError) => {
-                            console.error('Error reading file:', file.name, readError);
-                            reject(reader.error); // Reject the outer promise for this file
-                        };
-                        reader.readAsDataURL(file);
-                    }); // End of reader promise
-
-                } catch (error) {
-                    console.error(`Failed to process ${file.name}:`, error);
-                    showStatus(`Failed to process ${file.name}: ${error.message}`, 'error'); // Keep individual error toasts
-                    errorCount++;
-                }
+            // Process files in batches to avoid memory issues
+            for (let i = 0; i < files.length; i += BATCH_SIZE) {
+                const batch = Array.from(files).slice(i, i + BATCH_SIZE);
+                await processBatch(batch);
                 
-                // Update progress periodically or after an error/success
-                // Remove the modulo check to update on every file for smoother progress
+                // Update progress after each batch
                 showStatus(
                     `Processing: ${processedCount}/${totalFiles} files (${successCount} added, ${skippedCount} skipped, ${errorCount} errors)`,
                     'info',
@@ -1515,7 +1551,7 @@
                 );
             }
             
-            // Final status update (on the same toast)
+            // Final status update
             let finalMessage = '';
             if (successCount > 0) {
                 finalMessage += `Added ${successCount} image(s).`;
@@ -1582,7 +1618,7 @@
         });
     }
 
-    // Load images from IndexedDB with improved error handling
+    // Load images from IndexedDB with improved error handling and caching
     async function loadImagesFromDB() {
         return new Promise((resolve, reject) => {
             if (!db) {
@@ -1599,6 +1635,15 @@
             request.onsuccess = async () => { // Make onsuccess async
                 try {
                     let rawEntries = request.result;
+                    
+                    // Clear previous entries to prevent memory leaks
+                    if (imageEntries.length > 0) {
+                        // If we had previous entries, help GC by releasing references to base64 data
+                        imageEntries.forEach(entry => {
+                            entry.base64Data = null; // Clear the reference
+                        });
+                    }
+                    
                     imageEntries = []; // Clear before processing
                     originalOrder = [];
                     selectedIndices = [];
@@ -1606,6 +1651,11 @@
 
                     // Process entries to add keywords cache
                     for (const entry of rawEntries) {
+                        // Add timestamp if missing (backward compatibility)
+                        if (!entry.timestamp) {
+                            entry.timestamp = new Date().toISOString();
+                        }
+                        
                         entry.keywords = await getKeywordsFromEntry(entry); // Add keywords Set
                         imageEntries.push(entry);
                     }
@@ -1644,7 +1694,29 @@
         });
     }
 
-    // Display images in the gallery (Now includes filtering)
+    // Add a function to proactively release memory when unloading images
+    function releaseImageMemory() {
+        // Clear references to base64 data to help garbage collection
+        imageEntries.forEach(entry => {
+            entry.base64Data = null;
+        });
+        
+        // Clear DOM references to images
+        const thumbnails = document.querySelectorAll('.thumbnail-img');
+        thumbnails.forEach(img => {
+            img.src = '';
+            img.removeAttribute('data-src');
+        });
+        
+        // Force garbage collection if supported (won't work in all browsers)
+        if (window.gc) {
+            window.gc();
+        } else {
+            console.log('Manual garbage collection not supported in this browser');
+        }
+    }
+
+    // Modified displayImages function (only show visible part based on viewport)
     function displayImages() {
         galleryGrid.innerHTML = '';
         console.log(`[displayImages] Filtering with tags:`, selectedFilterTags);
@@ -1675,7 +1747,12 @@
              return;
          }
 
-        imagesToDisplay.forEach((entry) => {
+        // Only render a reasonable number of thumbnails at once for large collections
+        const MAX_INITIAL_THUMBNAILS = 100;
+        const initialEntries = imagesToDisplay.slice(0, MAX_INITIAL_THUMBNAILS);
+        const remainingEntries = imagesToDisplay.slice(MAX_INITIAL_THUMBNAILS);
+        
+        initialEntries.forEach((entry) => {
             // Need the original index for selection handling
             const originalIndex = imageEntries.findIndex(e => e.id === entry.id);
             if (originalIndex === -1) {
@@ -1686,9 +1763,64 @@
             const thumbnail = createThumbnail(entry, originalIndex);
             galleryGrid.appendChild(thumbnail);
         });
+        
+        // If we have more than MAX_INITIAL_THUMBNAILS, show a message and load more on scroll
+        if (remainingEntries.length > 0) {
+            const loadMoreDiv = document.createElement('div');
+            loadMoreDiv.id = 'load-more-container';
+            loadMoreDiv.style.textAlign = 'center';
+            loadMoreDiv.style.padding = '20px';
+            loadMoreDiv.innerHTML = `
+                <button id="load-more-btn" class="primary-btn">
+                    <i class="fas fa-plus"></i>Load more (${remainingEntries.length} remaining)
+                </button>
+            `;
+            galleryGrid.appendChild(loadMoreDiv);
+            
+            // Add click handler for load more button
+            document.getElementById('load-more-btn').addEventListener('click', () => {
+                loadMoreThumbnails(remainingEntries);
+            });
+        }
+        
         // Add grid-level listeners after thumbnails are added
         galleryGrid.addEventListener('dragover', handleDragOver);
         galleryGrid.addEventListener('drop', handleDrop);
+        
+        // Initialize lazy loading after adding thumbnails to the DOM
+        setupLazyLoading();
+    }
+    
+    // Function to load more thumbnails
+    function loadMoreThumbnails(remainingEntries) {
+        const BATCH_SIZE = 50; // Load 50 more at a time
+        const loadMoreBtn = document.getElementById('load-more-btn');
+        const loadMoreContainer = document.getElementById('load-more-container');
+        
+        // Get the next batch
+        const nextBatch = remainingEntries.splice(0, BATCH_SIZE);
+        
+        // Add the thumbnails
+        nextBatch.forEach((entry) => {
+            const originalIndex = imageEntries.findIndex(e => e.id === entry.id);
+            if (originalIndex === -1) return;
+            
+            const thumbnail = createThumbnail(entry, originalIndex);
+            // Insert before the load more button
+            galleryGrid.insertBefore(thumbnail, loadMoreContainer);
+        });
+        
+        // Update lazy loading for new thumbnails
+        setupLazyLoading();
+        
+        // Update or remove the load more button
+        if (remainingEntries.length > 0) {
+            loadMoreBtn.innerHTML = `
+                <i class="fas fa-plus"></i>Load more (${remainingEntries.length} remaining)
+            `;
+        } else {
+            loadMoreContainer.remove();
+        }
     }
 
     // Create thumbnail element
@@ -1706,106 +1838,17 @@
                 <i class="far fa-circle"></i> <!-- Default empty circle -->
             </div>
             <span class="drag-handle" style="position: absolute; top: 5px; left: 5px; cursor: grab; color: rgba(255,255,255,0.3); font-size: 14px; z-index: 1;"><i class="fas fa-grip-vertical"></i></span>
-            <img src="${entry.base64Data}" alt="${entry.name}" class="thumbnail-img">
+            <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'%3E%3Cpath fill='none' d='M0 0h24v24H0z'/%3E%3Cpath fill='rgba(255,255,255,0.2)' d='M4 5h16v14H4V5z'/%3E%3C/svg%3E" data-src="${entry.base64Data}" alt="${entry.name}" class="thumbnail-img lazy-load">
             <div class="thumbnail-info">
                 <div>${entry.name}</div>
                 <div>${entry.size}</div>
             </div>
         `;
 
-        // --- Unified Click/Tap Handler --- 
-        thumbnail.addEventListener('click', (event) => {
-            // Prevent default if drag handle is clicked
-            console.log('[Click Event] Fired. isLongPress:', isLongPress);
-            // Prevent triggering selection/modal if clicking the drag handle
-            if (event.target.closest('.drag-handle')) {
-                 console.log('[Click Event] Ignored: Drag handle clicked.');
-                 return;
-            }
-            
-            // If a long press was detected and handled selection, reset the flag and do nothing further on click
-            if (isLongPress) {
-                console.log('[Click Event] Ignored: Long press detected.');
-                isLongPress = false; // Reset for next interaction
-                return;
-            }
-
-            // --- Click Logic based on Select Mode ---
-            if (isSelectModeActive) {
-                // In select mode, clicks toggle selection (Shift+Click handled separately for range)
-                if (event.shiftKey) {
-                    console.log('[Click Event - Select Mode] Shift key detected. Performing range selection.');
-                    performRangeSelection(index);
-                } else {
-                    console.log('[Click Event - Select Mode] Toggling selection.');
-                    toggleSelection(index);
-                }
-            } else {
-                // Not in select mode
-                if (event.ctrlKey || event.metaKey) {
-                    console.log('[Click Event - Normal Mode] Ctrl/Meta key detected. Entering Select Mode and selecting.');
-                    // Enter select mode AND select this item
-                    enterSelectMode(); // Enter the mode first
-                    toggleSelection(index); // Then ensure this item is selected
-                } else {
-                    console.log('[Click Event - Normal Mode] Showing full image.');
-                    // Simple click opens the modal
-                    showFullImage(index);
-                }
-            }
-            // --- End Click Logic ---
-        });
-
-        // --- Long Press / Touch Handling ---
-        thumbnail.addEventListener('touchstart', (event) => {
-             // Prevent triggering if multiple fingers are used (e.g., pinch zoom)
-             if (event.touches.length > 1) {
-                 clearTimeout(longPressTimer);
-                 return;
-             }
-             console.log('[Touch Start]');
-             isLongPress = false; // Reset flag
-             // Start the timer for long press detection
-             longPressTimer = setTimeout(() => {
-                 console.log('[Long Press Timer] Fired.');
-                  isLongPress = true;
-                  // Action: Enter select mode if not already active, then toggle selection
-                  if (!isSelectModeActive) {
-                      console.log('[Long Press] Entering select mode and selecting.');
-                      enterSelectMode();
-                  }
-                  console.log('[Long Press] Toggling selection.');
-                  toggleSelection(index); // Always toggle the item on long press
-             }, longPressDuration);
-             // Prevent default context menu on long press
-             thumbnail.addEventListener('contextmenu', preventContextMenu);
-        });
-
-        thumbnail.addEventListener('touchend', () => {
-            console.log('[Touch End]');
-            clearTimeout(longPressTimer); // Clear timer on touch end
-            // Remove context menu prevention after interaction ends
-            thumbnail.removeEventListener('contextmenu', preventContextMenu);
-        });
-
-        thumbnail.addEventListener('touchmove', () => {
-             // Clear timer if finger moves significantly (prevents triggering during scroll)
-             console.log('[Touch Move] Clearing long press timer.');
-             clearTimeout(longPressTimer);
-             // Optionally remove context menu prevention here too if needed
-             thumbnail.removeEventListener('contextmenu', preventContextMenu);
-        });
-
-        // Helper to prevent context menu
-        const preventContextMenu = (e) => {
-             console.log('[Context Menu] Prevented.');
-             e.preventDefault();
-        };
-
-        // --- Add Drag and Drop Event Listeners ---
+        // Add dragstart and dragend events directly to each thumbnail
+        // These need to be on the element itself for proper behavior
         thumbnail.addEventListener('dragstart', handleDragStart);
         thumbnail.addEventListener('dragend', handleDragEnd);
-        // Add dragenter/dragleave directly to thumbnails for visual feedback on the target
         thumbnail.addEventListener('dragenter', handleDragEnter);
         thumbnail.addEventListener('dragleave', handleDragLeave);
 
@@ -1985,12 +2028,29 @@
         const entry = imageEntries[index];
         
         modalImage.src = entry.base64Data;
-        modalInfo.textContent = `${entry.name} (${entry.size})`;
+        
+        // Update modal info to include tags if they exist
+        let infoText = `${entry.name} (${entry.size})`;
+        
+        // Add tags if they exist
+        if (entry.keywords && entry.keywords.size > 0) {
+            const tagsList = Array.from(entry.keywords).join(', ');
+            infoText += `<div style="margin-top: 8px; font-size: 12px; color: #909090;">Tags: ${tagsList}</div>`;
+        }
+        
+        modalInfo.innerHTML = infoText;
+        
+        // Reset zoom when opening new image
+        modalImage.classList.remove('zoomed-fit');
+        modalImage.classList.remove('zoomed-full');
         
         imageModal.style.display = 'block';
         setTimeout(() => imageModal.classList.add('show'), 10);
         
         updateNavigationButtons();
+        
+        // Initialize zoom functionality
+        setupImageZoom();
     }
 
     // Update navigation buttons state
@@ -2166,9 +2226,128 @@
     function setupEventListeners() {
         console.log('Setting up event listeners...');
 
+        // Add throttle/debounce utility function
+        function throttle(func, limit) {
+            let inThrottle;
+            return function() {
+                const args = arguments;
+                const context = this;
+                if (!inThrottle) {
+                    func.apply(context, args);
+                    inThrottle = true;
+                    setTimeout(() => inThrottle = false, limit);
+                }
+            };
+        }
+
         // Select Mode Header Buttons
         document.getElementById('selectAllBtn').addEventListener('click', selectAll);
         document.getElementById('cancelSelectModeBtn').addEventListener('click', exitSelectMode);
+
+        // Add event delegation for thumbnail click/touch events for better performance
+        galleryGrid.addEventListener('click', (event) => {
+            // Find closest thumbnail parent (if any)
+            const thumbnail = event.target.closest('.thumbnail');
+            if (!thumbnail) return; // Not a click on a thumbnail
+
+            // Prevent default if drag handle is clicked
+            if (event.target.closest('.drag-handle')) {
+                console.log('[Click Event] Ignored: Drag handle clicked.');
+                return;
+            }
+            
+            const index = parseInt(thumbnail.dataset.index);
+            if (isNaN(index)) return; // Invalid index
+
+            // Apply the same click logic that was previously in the thumbnail event listeners
+            if (isSelectModeActive) {
+                // In select mode, clicks toggle selection (Shift+Click handled separately for range)
+                if (event.shiftKey) {
+                    console.log('[Click Event - Select Mode] Shift key detected. Performing range selection.');
+                    performRangeSelection(index);
+                } else {
+                    console.log('[Click Event - Select Mode] Toggling selection.');
+                    toggleSelection(index);
+                }
+            } else {
+                // Not in select mode
+                if (event.ctrlKey || event.metaKey) {
+                    console.log('[Click Event - Normal Mode] Ctrl/Meta key detected. Entering Select Mode and selecting.');
+                    // Enter select mode AND select this item
+                    enterSelectMode(); // Enter the mode first
+                    toggleSelection(index); // Then ensure this item is selected
+                } else {
+                    console.log('[Click Event - Normal Mode] Showing full image.');
+                    // Simple click opens the modal
+                    showFullImage(index);
+                }
+            }
+        });
+
+        // Touch events with event delegation
+        let touchStartTimestamp;
+        let touchStartTarget;
+        let touchTimer;
+
+        galleryGrid.addEventListener('touchstart', (event) => {
+            // Find closest thumbnail parent (if any)
+            const thumbnail = event.target.closest('.thumbnail');
+            if (!thumbnail) return; // Not a touch on a thumbnail
+
+            // Store reference to avoid issues with touch moving to a different element
+            touchStartTarget = thumbnail;
+            touchStartTimestamp = Date.now();
+            
+            // If multiple fingers are used (e.g., pinch zoom), don't start long press
+            if (event.touches.length > 1) {
+                clearTimeout(touchTimer);
+                return;
+            }
+            
+            const index = parseInt(thumbnail.dataset.index);
+            if (isNaN(index)) return; // Invalid index
+            
+            // Start long press timer
+            touchTimer = setTimeout(() => {
+                console.log('[Long Press Timer] Fired.');
+                if (!isSelectModeActive) {
+                    console.log('[Long Press] Entering select mode and selecting.');
+                    enterSelectMode();
+                }
+                toggleSelection(index);
+            }, 500); // 500ms for long press
+            
+            // Prevent default context menu
+            event.preventDefault();
+        });
+
+        galleryGrid.addEventListener('touchend', (event) => {
+            const thumbnail = touchStartTarget; // Use the stored reference
+            
+            if (!thumbnail) return; // Not a valid touch sequence
+            
+            clearTimeout(touchTimer); // Always clear the timer
+            
+            const touchDuration = Date.now() - touchStartTimestamp;
+            if (touchDuration < 500) { // Short touch - treat as click
+                const index = parseInt(thumbnail.dataset.index);
+                if (isNaN(index)) return; // Invalid index
+                
+                if (isSelectModeActive) {
+                    toggleSelection(index);
+                } else {
+                    showFullImage(index);
+                }
+            }
+            
+            // Reset touch tracking
+            touchStartTarget = null;
+            touchStartTimestamp = 0;
+        });
+
+        galleryGrid.addEventListener('touchmove', () => {
+            clearTimeout(touchTimer); // Cancel long press if touch moves
+        });
 
         // File selection handling
         const handleFileSelect = () => {
@@ -2349,10 +2528,16 @@
         const thumbnailSize = document.getElementById('thumbnailSize');
         const sizeValue = document.getElementById('sizeValue');
 
-        thumbnailSize.addEventListener('input', (e) => {
+        // Throttle the thumbnail size change to improve performance
+        thumbnailSize.addEventListener('input', throttle((e) => {
             const size = e.target.value;
             document.documentElement.style.setProperty('--thumbnail-size', `${size}px`);
             sizeValue.textContent = `${size}px`;
+        }, 50)); // Update at most every 50ms during drag
+
+        thumbnailSize.addEventListener('change', (e) => {
+            // This runs when the user releases the slider, so save to localStorage
+            const size = e.target.value;
             localStorage.setItem('thumbnailSize', size);
         });
 
@@ -2361,6 +2546,11 @@
         thumbnailSize.value = savedSize;
         document.documentElement.style.setProperty('--thumbnail-size', `${savedSize}px`);
         sizeValue.textContent = `${savedSize}px`;
+
+        // Throttle window resize event
+        window.addEventListener('resize', throttle(() => {
+            setupLazyLoading(); // Refresh lazy loading on resize
+        }, 100)); // 100ms throttle on resize
 
         // Initialize metadata editor
         initMetadataEditor();
@@ -3159,6 +3349,100 @@
         // lastSelectedIndex = clickedIndex; // We might reconsider this - usually the *first* click sets the anchor.
 
         updateSelectionUI();
+    }
+
+    // Add lazy loading observer
+    function setupLazyLoading() {
+        if ('IntersectionObserver' in window) {
+            const lazyImageObserver = new IntersectionObserver((entries, observer) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const lazyImage = entry.target;
+                        lazyImage.src = lazyImage.dataset.src;
+                        lazyImage.classList.remove('lazy-load');
+                        lazyImageObserver.unobserve(lazyImage);
+                    }
+                });
+            });
+
+            document.querySelectorAll('img.lazy-load').forEach(lazyImage => {
+                lazyImageObserver.observe(lazyImage);
+            });
+        } else {
+            // Fallback for browsers without intersection observer
+            document.querySelectorAll('img.lazy-load').forEach(img => {
+                img.src = img.dataset.src;
+                img.classList.remove('lazy-load');
+            });
+        }
+    }
+
+    // Add image zoom functionality
+    function setupImageZoom() {
+        let clickTimer = null;
+        let zoomState = 'normal'; // Possible states: 'normal', 'fit', 'full'
+        
+        // Remove existing listeners first to prevent duplicates
+        modalImage.removeEventListener('click', handleModalImageClick);
+        modalImage.removeEventListener('dblclick', handleModalImageDblClick);
+        
+        // Add new listeners
+        modalImage.addEventListener('click', handleModalImageClick);
+        modalImage.addEventListener('dblclick', handleModalImageDblClick);
+        
+        function handleModalImageClick(e) {
+            // Prevent triggering modal close
+            e.stopPropagation();
+            
+            if (clickTimer === null) {
+                // Start the timer for single-click
+                clickTimer = setTimeout(() => {
+                    // Single-click action: toggle between normal and fit zoom
+                    if (zoomState === 'normal') {
+                        // Zoom to fit
+                        zoomToFit();
+                    } else if (zoomState === 'fit') {
+                        // Return to normal
+                        resetZoom();
+                    } else if (zoomState === 'full') {
+                        // Return to fit
+                        zoomToFit();
+                    }
+                    clickTimer = null;
+                }, 250); // Delay to wait for double click
+            }
+        }
+        
+        function handleModalImageDblClick(e) {
+            e.stopPropagation();
+            clearTimeout(clickTimer); // Cancel single click
+            clickTimer = null;
+            
+            // Double-click action: toggle full zoom
+            if (zoomState !== 'full') {
+                zoomToFull();
+            } else {
+                resetZoom();
+            }
+        }
+        
+        function zoomToFit() {
+            modalImage.classList.remove('zoomed-full');
+            modalImage.classList.add('zoomed-fit');
+            zoomState = 'fit';
+        }
+        
+        function zoomToFull() {
+            modalImage.classList.remove('zoomed-fit');
+            modalImage.classList.add('zoomed-full');
+            zoomState = 'full';
+        }
+        
+        function resetZoom() {
+            modalImage.classList.remove('zoomed-fit');
+            modalImage.classList.remove('zoomed-full');
+            zoomState = 'normal';
+        }
     }
     </script>
 </body>
