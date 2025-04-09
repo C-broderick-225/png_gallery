@@ -145,7 +145,10 @@
             background: rgba(45, 45, 45, 0.6);
             border-radius: 12px;
             overflow: hidden;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            /* Optimize transition properties */
+            transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), 
+                        box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), 
+                        border-color 0.2s ease-out;
             cursor: pointer;
             border: 1px solid rgba(255, 255, 255, 0.05);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
@@ -156,8 +159,8 @@
         }
         
         .thumbnail:hover {
-            transform: translateY(-5px) scale(1.02);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            transform: translateY(-4px) scale(1.02);
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
             border-color: rgba(255, 255, 255, 0.1);
         }
         
@@ -809,6 +812,49 @@
              border-color: #4CAF50;
         }
 
+        /* Masonry Layout Styles (using CSS Columns) */
+        .gallery-grid.masonry-active {
+            display: block; /* Override grid display */
+            column-count: var(--masonry-columns, 4); /* Default columns, adjustable */
+            column-gap: 20px; /* Match grid gap */
+            grid-template-columns: unset; /* Remove grid column definition */
+            padding: 0; /* Remove grid padding if needed */
+        }
+
+        .gallery-grid.masonry-active .thumbnail {
+            display: inline-block; /* Allow items to flow into columns */
+            width: 100%; /* Make items fill column width */
+            margin-bottom: 20px; /* Space between items vertically */
+            break-inside: avoid; /* Prevent items breaking across columns */
+            /* Reset fixed height/aspect ratio for masonry */
+            height: auto !important; 
+            aspect-ratio: auto !important;
+            /* Reset transforms that might interfere with column layout */
+            transform: none !important; 
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); /* Keep original shadow */
+            border-color: rgba(255, 255, 255, 0.05); /* Keep original border */
+        }
+
+        /* Remove hover transform in masonry mode, keep shadow/border change */
+        .gallery-grid.masonry-active .thumbnail:hover {
+            transform: none !important; 
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        /* Ensure selected styles still apply border/shadow in masonry */
+        .gallery-grid.masonry-active .thumbnail.selected {
+             border: 3px solid #4CAF50;
+             box-shadow: 0 0 15px rgba(76, 175, 80, 0.5);
+        }
+        
+        .gallery-grid.masonry-active .thumbnail:hover.selected {
+             transform: none !important; 
+             box-shadow: 0 0 15px rgba(76, 175, 80, 0.5), 0 8px 24px rgba(0, 0, 0, 0.3);
+             border-color: #4CAF50;
+        }
+        /* End Masonry Layout Styles */
+
         /* Select Mode Styles */
         .select-mode-header {
             display: none;
@@ -948,6 +994,12 @@
             /* Style for the selected checkmark itself if needed */
             color: #4CAF50; /* Match border */
         }
+
+        /* Hide Thumbnail Info Style */
+        body.hide-thumbnail-info .thumbnail-info {
+            display: none;
+        }
+        /* End Hide Thumbnail Info Style */
     </style>
 
     <!-- Custom Context Menu Styles -->
@@ -1083,6 +1135,12 @@
                 <input type="range" id="thumbnailSize" min="150" max="400" value="250" step="10">
                 <span id="sizeValue">250px</span>
             </div>
+            <div class="menu-buttons" style="margin-top: 10px;">
+                <button id="toggleMasonryLayoutBtn"><i class="fas fa-th"></i>Grid Layout</button>
+            </div>
+            <div class="menu-buttons" style="margin-top: 10px;">
+                <button id="toggleThumbnailInfoBtn"><i class="fas fa-info-circle"></i>Show Info</button>
+            </div>
         </div>
     </div>
 
@@ -1090,7 +1148,7 @@
     <div id="selectModeHeader">
         <span id="selectModeCount">0 items selected</span>
         <div class="select-mode-controls">
-            <button id="selectAllBtn">Select All</button>
+            <!-- Removed Select All button as it's in the context menu -->
             <button id="cancelSelectModeBtn">Cancel</button>
         </div>
     </div>
@@ -1226,6 +1284,7 @@
         <ul>
             <li data-action="view"><i class="fas fa-eye"></i> View</li>
             <li data-action="select"><i class="fas fa-check-square"></i> Select</li>
+            <li data-action="select-all"><i class="fas fa-check-double"></i> Select All</li> <!-- Added -->
             <li data-action="tag"><i class="fas fa-tags"></i> Tag Selected</li>
             <li data-action="download"><i class="fas fa-download"></i> Download</li>
             <li data-action="delete"><i class="fas fa-trash"></i> Delete</li>
@@ -1238,7 +1297,7 @@
     class PNGMetadata {
         constructor() {
             console.log('PNGMetadata constructor called (using tEXt-parser).');
-            // Use a promise to ensure the library loads before use
+            // Use a promise to ensure the library loads before use with a timeout
             this.libraryPromise = new Promise((resolve, reject) => {
                 // Check if library is already loaded
                 if (window.tEXt) {
@@ -1247,10 +1306,17 @@
                     return;
                 }
                 console.log('Attempting to load tEXt-parser library...');
+                
+                // Add a timeout to prevent hanging if script fails
+                const timeoutId = setTimeout(() => {
+                    reject(new Error('tEXt-parser library load timeout after 5000ms'));
+                }, 5000);
+                
                 // Dynamically load the library script
                 const script = document.createElement('script');
                 script.src = 'js/tEXt-parser.js'; // Path to the new library
                 script.onload = () => {
+                    clearTimeout(timeoutId);
                     console.log('tEXt-parser script onload event fired. window.tEXt:', window.tEXt);
                     if (window.tEXt && typeof window.tEXt.decode === 'function' && typeof window.tEXt.encode === 'function') {
                         console.log('tEXt-parser library loaded successfully.');
@@ -1261,6 +1327,7 @@
                     }
                 };
                 script.onerror = (err) => {
+                    clearTimeout(timeoutId);
                     console.error('Failed to load tEXt-parser library script:', err);
                     reject(new Error('Failed to load tEXt-parser library script'));
                 };
@@ -1379,12 +1446,31 @@
     let contextMenuTargetIndex = -1;
     // --- Custom Context Menu Elements & State --- End
 
+    // --- Masonry Layout State --- Start
+    let isMasonryLayoutActive = false;
+    // --- Masonry Layout State --- End
+
+    // --- Thumbnail Info State --- Start
+    let isThumbnailInfoHidden = false;
+    // --- Thumbnail Info State --- End
+
     // DOM Elements
     const galleryGrid = document.getElementById('galleryGrid');
-    // const selectFolderBtn = document.getElementById('selectFolderBtn'); // Removed from header
-    // const addFilesBtn = document.getElementById('addFilesBtn');       // Removed from header
-    // const clearGalleryBtn = document.getElementById('clearGalleryBtn'); // Removed from header
-    // const reloadBtn = document.getElementById('reloadBtn');           // Removed from header
+
+    // --- Utility Functions --- Start
+    function throttle(func, limit) {
+        let inThrottle;
+        return function() {
+            const args = arguments;
+            const context = this;
+            if (!inThrottle) {
+                func.apply(context, args);
+                inThrottle = true;
+                setTimeout(() => inThrottle = false, limit);
+            }
+        };
+    }
+    // --- Utility Functions --- End
 
     // Create file input for multiple files
     const fileInput = document.createElement('input');
@@ -1434,7 +1520,6 @@
     const editorAddToGalleryBtn = document.getElementById('editorAddToGalleryBtn');
     const editorMetadataForm = document.getElementById('editorMetadataForm');
     const previewImage = document.getElementById('previewImage');
-    // const openEditorBtn = document.getElementById('openEditorBtn'); // Removed from header
 
     // Add editor button to menu
     document.querySelector('.menu-buttons').insertAdjacentHTML('beforeend', `
@@ -1516,7 +1601,6 @@
             tagSelectedBtn = document.getElementById('tagSelectedBtn');
             menuTagSelectedBtn = document.getElementById('menuTagSelectedBtn');
             // --- Initialize Download Selected Elements Here --- Start
-            // downloadSelectedBtn = document.getElementById('downloadSelectedBtn'); // Removed from header
             menuDownloadSelectedBtn = document.getElementById('menuDownloadSelectedBtn');
             // --- Initialize Download Selected Elements Here --- End
             // --- Initialize Custom Context Menu Element --- Start
@@ -1526,6 +1610,10 @@
             setupEventListeners(); // Existing listeners
             setupBulkTagListeners(); // Add bulk tag listeners
             updateButtonText();
+            // Initialize layout FIRST, then size control
+            initMasonryLayout(); // Initialize masonry layout state
+            initThumbnailInfo(); // Initialize thumbnail info visibility state
+            initThumbnailSizeControl(); // Initialize size slider (applies based on layout)
             
             // Show mobile usage tip for first-time visitors on mobile devices
             const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -1604,13 +1692,33 @@
                             reader.onload = async () => {
                                 try {
                                     console.log('File read successfully:', file.name);
+
+                                    // --- Extract tags if PNG ---
+                                    let extractedTags = [];
+                                    if (file.type === 'image/png') {
+                                        try {
+                                            const metadata = await pngMetadata.readMetadata(file);
+                                            const keywordsString = metadata['Keywords'] || '';
+                                            extractedTags = keywordsString.split(',')
+                                                .map(k => k.trim().toLowerCase())
+                                                .filter(k => k !== '');
+                                            if (extractedTags.length > 0) {
+                                                console.log(`Extracted tags for ${file.name}:`, extractedTags);
+                                            }
+                                        } catch (metadataError) {
+                                            console.warn(`Could not read metadata for ${file.name}:`, metadataError);
+                                            // Proceed without tags if metadata read fails
+                                        }
+                                    }
+                                    // --- End tag extraction ---
+
                                     const entry = {
                                         name: file.name,
                                         size: formatFileSize(file.size),
                                         type: file.type,
                                         timestamp: new Date().toISOString(),
                                         base64Data: reader.result,
-                                        tags: [] // Initialize tags as an empty array
+                                        tags: extractedTags // Use extracted or empty tags
                                     };
 
                                     const transaction = db.transaction([IMAGE_STORE_NAME], 'readwrite');
@@ -1808,25 +1916,65 @@
         });
     }
 
-    // Add a function to proactively release memory when unloading images
+    // Enhanced function to proactively release memory when unloading images
     function releaseImageMemory() {
         // Clear references to base64 data to help garbage collection
         imageEntries.forEach(entry => {
-            entry.base64Data = null;
+            // Only clear if the entry has base64Data
+            if (entry.base64Data) {
+                // For object URLs, we should revoke them to free memory immediately
+                if (entry.base64Data.startsWith('blob:')) {
+                    try {
+                        URL.revokeObjectURL(entry.base64Data);
+                    } catch (e) {
+                        console.warn('Failed to revoke object URL:', e);
+                    }
+                }
+                entry.base64Data = null;
+            }
         });
         
         // Clear DOM references to images
         const thumbnails = document.querySelectorAll('.thumbnail-img');
         thumbnails.forEach(img => {
+            // Also revoke any blob URLs in src attributes
+            if (img.src && img.src.startsWith('blob:')) {
+                try {
+                    URL.revokeObjectURL(img.src);
+                } catch (e) {
+                    console.warn('Failed to revoke image src URL:', e);
+                }
+            }
+            
+            // Clear src and data-src attributes
             img.src = '';
             img.removeAttribute('data-src');
         });
+        
+        // Also clear modal image if open
+        if (modalImage && modalImage.src) {
+            if (modalImage.src.startsWith('blob:')) {
+                try {
+                    URL.revokeObjectURL(modalImage.src);
+                } catch (e) {
+                    console.warn('Failed to revoke modal image URL:', e);
+                }
+            }
+            modalImage.src = '';
+        }
         
         // Force garbage collection if supported (won't work in all browsers)
         if (window.gc) {
             window.gc();
         } else {
-            console.log('Manual garbage collection not supported in this browser');
+            // Try alternative methods that might trigger garbage collection
+            try {
+                const arr = new Array(100 * 1024 * 1024).fill(0); // Allocate large array to force memory pressure
+                arr.length = 0; // Release the array
+            } catch(e) {
+                console.log('Memory pressure allocation failed:', e);
+            }
+            console.log('Manual garbage collection triggered via memory pressure');
         }
     }
 
@@ -1937,10 +2085,6 @@
 
     // Create thumbnail element
     function createThumbnail(entry, index) {
-        let longPressTimer;
-        let isLongPress = false;
-        const longPressDuration = 500; // 500ms for long press
-
         const thumbnail = document.createElement('div');
         thumbnail.className = 'thumbnail';
         thumbnail.dataset.index = index; // Add index attribute for easy selection later
@@ -2004,29 +2148,19 @@
     // Update UI based on selection state (e.g., buttons)
     function updateSelectionUI() {
         const count = selectedIndices.length;
-        // const selectionCountSpan = document.getElementById('selectionCount'); // Span removed from header
         const menuSelectionCountSpan = document.getElementById('menuSelectionCount');
-        // const selectionCountDLSpan = document.getElementById('selectionCountDL'); // Span removed from header
         const menuSelectionCountDLSpan = document.getElementById('menuSelectionCountDL');
 
         // Update hamburger menu button visibility/count
         if (count > 0) {
-            // tagSelectedBtn.style.display = 'flex'; // Button removed from header
             menuTagSelectedBtn.style.display = 'flex';
-            // downloadSelectedBtn.style.display = 'flex'; // Button removed from header
             menuDownloadSelectedBtn.style.display = 'flex';
-            // selectionCountSpan.textContent = count; // Span removed from header
             menuSelectionCountSpan.textContent = count;
-            // selectionCountDLSpan.textContent = count; // Span removed from header
             menuSelectionCountDLSpan.textContent = count;
         } else {
-            // tagSelectedBtn.style.display = 'none'; // Button removed from header
             menuTagSelectedBtn.style.display = 'none';
-            // downloadSelectedBtn.style.display = 'none'; // Button removed from header
             menuDownloadSelectedBtn.style.display = 'none';
-            // selectionCountSpan.textContent = '0'; // Span removed from header
             menuSelectionCountSpan.textContent = '0';
-            // selectionCountDLSpan.textContent = '0'; // Span removed from header
             menuSelectionCountDLSpan.textContent = '0';
         }
 
@@ -2280,7 +2414,6 @@
         }
 
         // Select Mode Header Buttons
-        document.getElementById('selectAllBtn').addEventListener('click', selectAll);
         document.getElementById('cancelSelectModeBtn').addEventListener('click', exitSelectMode);
 
         // Add event delegation for thumbnail click/touch events for better performance
@@ -2625,6 +2758,10 @@
 
         // Throttle window resize event
         window.addEventListener('resize', throttle(() => {
+            // Re-apply size/column settings on resize if masonry is active
+            if (isMasonryLayoutActive) {
+                handleThumbnailSizeChange(); 
+            }
             setupLazyLoading(); // Refresh lazy loading on resize
         }, 100)); // 100ms throttle on resize
 
@@ -3087,7 +3224,7 @@
         let successCount = 0;
         let errorCount = 0;
 
-        showStatus(`Applying tags to ${total} image(s)...`, 'info');
+        showStatus(`Applying tags to ${total} image(s)...`, 'info'); // Initial toast
         applyBulkTagBtn.disabled = true;
         applyBulkTagBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>Applying...';
         cancelBulkTagBtn.disabled = true; // Disable cancel during processing
@@ -3128,12 +3265,12 @@
                 imageEntries[index] = updatedEntry;
 
                 successCount++;
-                 showStatus(`Processing: ${i + 1}/${total}... (${successCount} success, ${errorCount} errors)`, 'info');
+                // The showStatus call inside the try block was removed.
 
             } catch (error) {
                 console.error(`Failed to process image ${entry.name} (index ${index}):`, error);
                 errorCount++;
-                 showStatus(`Processing: ${i + 1}/${total}... (${successCount} success, ${errorCount} errors)`, 'info');
+                // The showStatus call inside the catch block was removed.
             }
         }
 
@@ -3603,38 +3740,50 @@
     // --- Handle Context Menu Item Clicks --- Start
     async function handleContextMenuAction(event) {
         const actionItem = event.target.closest('li[data-action]');
-        if (!actionItem || contextMenuTargetIndex === -1) {
+        // Keep track of the target index for actions that need it
+        let targetIndex = contextMenuTargetIndex;
+
+        if (!actionItem) { // Removed targetIndex check here as select-all doesn't need it initially
             hideContextMenu();
             return;
         }
 
         const action = actionItem.dataset.action;
-        const targetIndex = contextMenuTargetIndex; // Use stored index
 
-        // Ensure the index is valid before proceeding
-        if (targetIndex < 0 || targetIndex >= imageEntries.length) {
-            console.error('Invalid target index for context menu action:', targetIndex);
-            hideContextMenu();
-            return;
+        // Ensure the index is valid *only for actions that require it*
+        if ([ 'view', 'select', 'tag', 'download', 'delete'].includes(action)) {
+             if (targetIndex === -1 || targetIndex < 0 || targetIndex >= imageEntries.length) {
+                 console.error('Invalid target index for context menu action:', targetIndex);
+                 hideContextMenu();
+                 return;
+             }
         }
 
         hideContextMenu(); // Hide menu immediately after action selected
 
-        console.log(`Context menu action: '${action}' on index: ${targetIndex}`);
+        console.log(`Context menu action: '${action}'`, (targetIndex !== -1 ? `on index: ${targetIndex}` : '')); // Adjust log
 
         switch (action) {
             case 'view':
+                // Index already validated above
                 showFullImage(targetIndex);
                 break;
             case 'select':
-                // Enter select mode if not already active
+                // Index already validated above
                 if (!isSelectModeActive) {
                     enterSelectMode();
                 }
                 // Toggle selection for the target item
                 toggleSelection(targetIndex);
                 break;
+            case 'select-all': // Add this case
+                if (!isSelectModeActive) {
+                    enterSelectMode();
+                }
+                selectAll(); // Call the existing selectAll function
+                break;
             case 'tag':
+                // Index already validated above
                 // Ensure the target item is selected first
                 if (!selectedIndices.includes(targetIndex)) {
                     // Enter select mode if necessary
@@ -3647,6 +3796,7 @@
                 openBulkTagModal();
                 break;
             case 'download':
+                // Index already validated above
                 // Directly download the target image
                 const entryToDownload = imageEntries[targetIndex];
                 if (entryToDownload && entryToDownload.base64Data && entryToDownload.name) {
@@ -3667,6 +3817,7 @@
                 }
                 break;
             case 'delete':
+                // Index already validated above
                 // Confirm and delete the target image
                 const entryToDelete = imageEntries[targetIndex];
                 if (confirm(`Are you sure you want to delete ${entryToDelete.name}?`)) {
@@ -3694,6 +3845,167 @@
         }
     }
     // --- Handle Context Menu Item Clicks --- End
+
+    // --- Replace with optimized code ---
+    // Cache lazy loading observer instance for reuse
+    let lazyImageObserver = null;
+    
+    // Add lazy loading observer with improved performance
+    function setupLazyLoading() {
+        // Disconnect previous observer if it exists
+        if (lazyImageObserver) {
+            lazyImageObserver.disconnect();
+        }
+        
+        if ('IntersectionObserver' in window) {
+            // Create new observer with better performance options
+            lazyImageObserver = new IntersectionObserver((entries, observer) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const lazyImage = entry.target;
+                        // Only load if src hasn't been set yet (avoid duplicate loading)
+                        if (lazyImage.src !== lazyImage.dataset.src && lazyImage.dataset.src) {
+                            lazyImage.src = lazyImage.dataset.src;
+                            lazyImage.classList.remove('lazy-load');
+                            observer.unobserve(lazyImage);
+                        }
+                    }
+                });
+            }, {
+                rootMargin: '200px 0px', // Start loading 200px before images enter viewport
+                threshold: 0.01 // Trigger with minimal visibility
+            });
+
+            // Observe all lazy load images
+            document.querySelectorAll('img.lazy-load').forEach(lazyImage => {
+                lazyImageObserver.observe(lazyImage);
+            });
+        } else {
+            // Fallback for browsers without intersection observer
+            document.querySelectorAll('img.lazy-load').forEach(img => {
+                if (img.dataset.src) {
+                    img.src = img.dataset.src;
+                    img.classList.remove('lazy-load');
+                }
+            });
+        }
+    }
+    // --- Replace with optimized code ---
+
+    // --- Masonry Layout Toggle Logic --- Start
+    function toggleMasonryLayout() {
+        isMasonryLayoutActive = !isMasonryLayoutActive;
+        const btn = document.getElementById('toggleMasonryLayoutBtn');
+        
+        // Apply the *current* slider value appropriately for the new mode
+        handleThumbnailSizeChange(); 
+
+        if (isMasonryLayoutActive) {
+            galleryGrid.classList.add('masonry-active');
+            btn.innerHTML = '<i class="fas fa-columns"></i>Masonry Layout';
+            localStorage.setItem('masonryLayoutActive', 'true');
+        } else {
+            galleryGrid.classList.remove('masonry-active');
+            btn.innerHTML = '<i class="fas fa-th"></i>Grid Layout';
+            localStorage.setItem('masonryLayoutActive', 'false');
+        }
+        // Re-run lazy loading setup in case layout change affects visibility
+        setupLazyLoading();
+    }
+
+    function initMasonryLayout() {
+        const savedState = localStorage.getItem('masonryLayoutActive');
+        if (savedState === 'true') {
+            // Apply immediately without transition if loaded as active
+            isMasonryLayoutActive = true;
+            galleryGrid.classList.add('masonry-active');
+            const btn = document.getElementById('toggleMasonryLayoutBtn');
+            btn.innerHTML = '<i class="fas fa-columns"></i>Masonry Layout';
+            // document.querySelector('.size-control').style.display = 'none'; 
+        }
+        // Add listener after initial state is set
+        document.getElementById('toggleMasonryLayoutBtn').addEventListener('click', toggleMasonryLayout);
+    }
+    // --- Masonry Layout Toggle Logic --- End
+
+    // --- Thumbnail Info Toggle Logic --- Start
+    function toggleThumbnailInfo() {
+        isThumbnailInfoHidden = !isThumbnailInfoHidden;
+        const btn = document.getElementById('toggleThumbnailInfoBtn');
+        if (isThumbnailInfoHidden) {
+            document.body.classList.add('hide-thumbnail-info');
+            btn.innerHTML = '<i class="fas fa-eye-slash"></i>Hide Info';
+            localStorage.setItem('thumbnailInfoHidden', 'true');
+        } else {
+            document.body.classList.remove('hide-thumbnail-info');
+            btn.innerHTML = '<i class="fas fa-info-circle"></i>Show Info';
+            localStorage.setItem('thumbnailInfoHidden', 'false');
+        }
+    }
+
+    function initThumbnailInfo() {
+        const savedState = localStorage.getItem('thumbnailInfoHidden');
+        const btn = document.getElementById('toggleThumbnailInfoBtn');
+        if (savedState === 'true') {
+            isThumbnailInfoHidden = true;
+            document.body.classList.add('hide-thumbnail-info');
+            btn.innerHTML = '<i class="fas fa-eye-slash"></i>Hide Info';
+        } else {
+            // Default is shown, ensure class is not present and button is correct
+            isThumbnailInfoHidden = false;
+            document.body.classList.remove('hide-thumbnail-info');
+            btn.innerHTML = '<i class="fas fa-info-circle"></i>Show Info';
+        }
+        // Add listener after initial state is set
+        btn.addEventListener('click', toggleThumbnailInfo);
+    }
+    // --- Thumbnail Info Toggle Logic --- End
+
+    // --- Thumbnail Size Control --- Start
+    function getMasonryColumnsFromSlider(sliderValue) {
+        const value = parseInt(sliderValue, 10);
+        if (value < 180) return 6;
+        if (value < 230) return 5;
+        if (value < 280) return 4;
+        if (value < 350) return 3;
+        return 2;
+    }
+
+    function handleThumbnailSizeChange() {
+        const thumbnailSizeSlider = document.getElementById('thumbnailSize');
+        const sizeValueSpan = document.getElementById('sizeValue');
+        const size = thumbnailSizeSlider.value;
+        
+        sizeValueSpan.textContent = `${size}px`; // Always show the pixel value
+
+        if (isMasonryLayoutActive) {
+            const columns = getMasonryColumnsFromSlider(size);
+            document.documentElement.style.setProperty('--masonry-columns', columns);
+            console.log(`Masonry Mode: Slider ${size}px -> ${columns} columns`);
+        } else {
+            document.documentElement.style.setProperty('--thumbnail-size', `${size}px`);
+            console.log(`Grid Mode: Slider -> ${size}px`);
+        }
+    }
+
+    function saveThumbnailSizePreference() {
+        const thumbnailSizeSlider = document.getElementById('thumbnailSize');
+        localStorage.setItem('thumbnailSize', thumbnailSizeSlider.value);
+    }
+
+    function initThumbnailSizeControl() {
+        const thumbnailSizeSlider = document.getElementById('thumbnailSize');
+        const savedSize = localStorage.getItem('thumbnailSize') || '250';
+        thumbnailSizeSlider.value = savedSize;
+
+        // Apply initial size based on loaded layout mode (which should be set *before* this)
+        handleThumbnailSizeChange(); 
+
+        // Add listeners
+        thumbnailSizeSlider.addEventListener('input', throttle(handleThumbnailSizeChange, 50));
+        thumbnailSizeSlider.addEventListener('change', saveThumbnailSizePreference);
+    }
+    // --- Thumbnail Size Control --- End
 
     </script>
 </body>
