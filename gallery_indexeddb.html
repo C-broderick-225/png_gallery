@@ -809,20 +809,6 @@
              border-color: #4CAF50;
         }
 
-        /* Drag and drop styles */
-        .thumbnail.dragging {
-            opacity: 0.5;
-            border: 2px dashed #e0e0e0;
-        }
-
-        .thumbnail.drag-over-element {
-            /* Add a visual indicator for the drop target */
-            /* Example: slightly scale up or add a border */
-            transform: scale(1.03);
-            border: 2px solid #4CAF50; /* Reuse selection color */
-            transition: transform 0.1s ease-in-out, border 0.1s ease-in-out;
-        }
-
         /* Select Mode Styles */
         .select-mode-header {
             display: none;
@@ -963,6 +949,68 @@
             color: #4CAF50; /* Match border */
         }
     </style>
+
+    <!-- Custom Context Menu Styles -->
+    <style>
+        .custom-context-menu {
+            position: absolute;
+            display: none;
+            background: rgba(45, 45, 45, 0.9);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            z-index: 1010;
+            padding: 8px 0;
+            min-width: 160px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .custom-context-menu ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .custom-context-menu li {
+            padding: 10px 15px;
+            color: #e0e0e0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            transition: background 0.2s ease;
+        }
+
+        .custom-context-menu li i {
+            width: 16px;
+            text-align: center;
+            color: #909090;
+            transition: color 0.2s ease;
+        }
+
+        .custom-context-menu li:hover {
+            background: rgba(97, 97, 97, 0.7);
+        }
+
+        .custom-context-menu li:hover i {
+            color: #e0e0e0;
+        }
+
+        /* Style for disabled menu items if needed later */
+        .custom-context-menu li.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background: transparent !important; /* Override hover */
+        }
+
+        .custom-context-menu li.disabled:hover i {
+            color: #909090; /* Keep icon color disabled */
+        }
+    </style>
+    <!-- End Custom Context Menu Styles -->
+
 </head>
 <body>
     <!-- Update header structure -->
@@ -998,7 +1046,7 @@
                 <button id="sortByNameBtn"><i class="fas fa-sort-alpha-down"></i>By Name</button>
                 <button id="sortByDateBtn"><i class="fas fa-calendar"></i>By Date</button>
                 <button id="sortBySizeBtn"><i class="fas fa-weight-hanging"></i>By Size</button>
-                <button id="restoreOrderBtn"><i class="fas fa-undo"></i>Restore Order</button>
+                <!-- Removed Restore Order Button -->
             </div>
         </div>
 
@@ -1155,6 +1203,18 @@
 
     <div class="toast-container" id="toastContainer"></div>
 
+    <!-- Custom Context Menu -->
+    <div id="customContextMenu" class="custom-context-menu">
+        <ul>
+            <li data-action="view"><i class="fas fa-eye"></i> View</li>
+            <li data-action="select"><i class="fas fa-check-square"></i> Select</li>
+            <li data-action="tag"><i class="fas fa-tags"></i> Tag Selected</li>
+            <li data-action="download"><i class="fas fa-download"></i> Download</li>
+            <li data-action="delete"><i class="fas fa-trash"></i> Delete</li>
+        </ul>
+    </div>
+    <!-- End Custom Context Menu -->
+
     <script>
     // Modify PNGMetadata class to use tEXt-parser
     class PNGMetadata {
@@ -1269,7 +1329,7 @@
 
     // Constants for IndexedDB
     const DB_NAME = 'imageGalleryDB';
-    const DB_VERSION = 1;
+    const DB_VERSION = 3; // Increment version
     const IMAGE_STORE_NAME = 'images';
     
     // File validation constants
@@ -1281,11 +1341,9 @@
     let db = null;
     let currentImageIndex = -1;
     let imageEntries = []; // This array will be reordered by drag/drop
-    let originalOrder = [];
     let selectedIndices = []; // Added for multi-select
     let selectedFilterTags = new Set(); // Added for tag filtering
     let loadingToastId = null; // Added to track the loading status toast
-    let draggedIndex = null; // Store the index of the item being dragged
 
     // --- Selection Mode State ---
     let isSelectModeActive = false;
@@ -1296,6 +1354,11 @@
     // --- Download Selected Elements & References --- Start
     let downloadSelectedBtn, menuDownloadSelectedBtn;
     // --- Download Selected Elements & References --- End
+
+    // --- Custom Context Menu Elements & State --- Start
+    let customContextMenu = null;
+    let contextMenuTargetIndex = -1;
+    // --- Custom Context Menu Elements & State --- End
 
     // DOM Elements
     const galleryGrid = document.getElementById('galleryGrid');
@@ -1393,14 +1456,28 @@
 
             request.onupgradeneeded = (event) => {
                 const db = event.target.result;
+                let store;
                 if (!db.objectStoreNames.contains(IMAGE_STORE_NAME)) {
                     try {
-                        const store = db.createObjectStore(IMAGE_STORE_NAME, { keyPath: 'id', autoIncrement: true });
+                        store = db.createObjectStore(IMAGE_STORE_NAME, { keyPath: 'id', autoIncrement: true });
                         store.createIndex('name', 'name', { unique: false });
                         store.createIndex('timestamp', 'timestamp', { unique: false });
                     } catch (error) {
                         console.error('Error creating object store:', error);
                         showStatus('Failed to initialize database structure', 'error');
+                    }
+                } else {
+                    store = event.target.transaction.objectStore(IMAGE_STORE_NAME);
+                }
+
+                // Add tags index if it doesn't exist (for version 3 upgrade)
+                if (!store.indexNames.contains('tags')) {
+                    try {
+                        store.createIndex('tags', 'tags', { unique: false, multiEntry: true });
+                        console.log("Created 'tags' index.");
+                    } catch(e) {
+                        console.error("Error creating 'tags' index:", e);
+                        // Handle potential errors, maybe reject the upgrade?
                     }
                 }
             };
@@ -1420,9 +1497,12 @@
             tagSelectedBtn = document.getElementById('tagSelectedBtn');
             menuTagSelectedBtn = document.getElementById('menuTagSelectedBtn');
             // --- Initialize Download Selected Elements Here --- Start
-            downloadSelectedBtn = document.getElementById('downloadSelectedBtn');
+            // downloadSelectedBtn = document.getElementById('downloadSelectedBtn'); // Removed from header
             menuDownloadSelectedBtn = document.getElementById('menuDownloadSelectedBtn');
             // --- Initialize Download Selected Elements Here --- End
+            // --- Initialize Custom Context Menu Element --- Start
+            customContextMenu = document.getElementById('customContextMenu');
+            // --- Initialize Custom Context Menu Element --- End
             await loadImagesFromDB();
             setupEventListeners(); // Existing listeners
             setupBulkTagListeners(); // Add bulk tag listeners
@@ -1497,7 +1577,8 @@
                                         size: formatFileSize(file.size),
                                         type: file.type,
                                         timestamp: new Date().toISOString(),
-                                        base64Data: reader.result
+                                        base64Data: reader.result,
+                                        tags: [] // Initialize tags as an empty array
                                     };
 
                                     const transaction = db.transaction([IMAGE_STORE_NAME], 'readwrite');
@@ -1645,7 +1726,6 @@
                     }
                     
                     imageEntries = []; // Clear before processing
-                    originalOrder = [];
                     selectedIndices = [];
                     selectedFilterTags.clear(); // Clear filters on full reload
 
@@ -1655,12 +1735,14 @@
                         if (!entry.timestamp) {
                             entry.timestamp = new Date().toISOString();
                         }
+                        // Ensure tags array exists (backward compatibility & future proofing)
+                        if (!Array.isArray(entry.tags)) {
+                            entry.tags = [];
+                        }
                         
-                        entry.keywords = await getKeywordsFromEntry(entry); // Add keywords Set
+                        // entry.keywords = await getKeywordsFromEntry(entry); // Remove PNG-specific keyword extraction
                         imageEntries.push(entry);
                     }
-
-                    originalOrder = [...imageEntries]; // Store order after processing
 
                     updateSelectionUI(); // Use the UI update function
                     displayImages();
@@ -1725,12 +1807,14 @@
             if (selectedFilterTags.size === 0) {
                 return true; // No filters active, show all
             }
-            if (!entry.keywords || entry.keywords.size === 0) {
-                return false; // Image has no keywords, cannot match OR filters either
+            // Check the entry.tags array directly
+            if (!Array.isArray(entry.tags) || entry.tags.length === 0) {
+                return false; // Image has no tags, cannot match filters
             }
-            // Check if image keywords contain ANY selected filter tags (OR logic)
+            // Check if image tags contain ANY selected filter tags (OR logic)
             for (const filterTag of selectedFilterTags) {
-                if (entry.keywords.has(filterTag)) {
+                // Check if the tag exists in the entry's tags array (case-insensitive)
+                if (entry.tags.some(imgTag => imgTag.toLowerCase() === filterTag.toLowerCase())) {
                     return true; // Found at least one matching tag
                 }
             }
@@ -1783,10 +1867,6 @@
             });
         }
         
-        // Add grid-level listeners after thumbnails are added
-        galleryGrid.addEventListener('dragover', handleDragOver);
-        galleryGrid.addEventListener('drop', handleDrop);
-        
         // Initialize lazy loading after adding thumbnails to the DOM
         setupLazyLoading();
     }
@@ -1832,12 +1912,10 @@
         const thumbnail = document.createElement('div');
         thumbnail.className = 'thumbnail';
         thumbnail.dataset.index = index; // Add index attribute for easy selection later
-        thumbnail.draggable = true; // Make the thumbnail draggable
         thumbnail.innerHTML = `
             <div class="thumbnail-checkbox-overlay">
                 <i class="far fa-circle"></i> <!-- Default empty circle -->
             </div>
-            <span class="drag-handle" style="position: absolute; top: 5px; left: 5px; cursor: grab; color: rgba(255,255,255,0.3); font-size: 14px; z-index: 1;"><i class="fas fa-grip-vertical"></i></span>
             <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'%3E%3Cpath fill='none' d='M0 0h24v24H0z'/%3E%3Cpath fill='rgba(255,255,255,0.2)' d='M4 5h16v14H4V5z'/%3E%3C/svg%3E" data-src="${entry.base64Data}" alt="${entry.name}" class="thumbnail-img lazy-load">
             <div class="thumbnail-info">
                 <div>${entry.name}</div>
@@ -1845,95 +1923,12 @@
             </div>
         `;
 
-        // Add dragstart and dragend events directly to each thumbnail
-        // These need to be on the element itself for proper behavior
-        thumbnail.addEventListener('dragstart', handleDragStart);
-        thumbnail.addEventListener('dragend', handleDragEnd);
-        thumbnail.addEventListener('dragenter', handleDragEnter);
-        thumbnail.addEventListener('dragleave', handleDragLeave);
-
         // Apply selected class if this index is already selected (e.g., after reload/redisplay)
         if (selectedIndices.includes(index)) {
             thumbnail.classList.add('selected');
         }
 
         return thumbnail;
-    }
-
-    // --- Drag and Drop Handlers ---
-    function handleDragStart(e) {
-        // Check if the drag started on the handle (optional, could allow dragging anywhere on thumb)
-        // if (!e.target.classList.contains('drag-handle')) {
-        //     e.preventDefault();
-        //     return;
-        // }
-        draggedIndex = parseInt(this.dataset.index);
-        this.classList.add('dragging');
-        e.dataTransfer.effectAllowed = 'move';
-        // Optional: Set data transfer data if needed elsewhere, though index is stored globally here
-        // e.dataTransfer.setData('text/plain', draggedIndex);
-        console.log(`Drag Start - Index: ${draggedIndex}`);
-    }
-
-    function handleDragEnd(e) {
-        this.classList.remove('dragging');
-        // Clear any lingering drag-over styles
-        document.querySelectorAll('.thumbnail.drag-over-element').forEach(el => el.classList.remove('drag-over-element'));
-        console.log(`Drag End - Index: ${draggedIndex}`);
-        draggedIndex = null; // Reset dragged index
-    }
-
-    function handleDragOver(e) {
-        e.preventDefault(); // Necessary to allow dropping
-        e.dataTransfer.dropEffect = 'move';
-    }
-
-    function handleDragEnter(e) {
-        e.preventDefault();
-        // Add visual cue to the potential drop target element (not the grid itself)
-        if (this.dataset.index !== draggedIndex?.toString()) { // Don't highlight the dragged item itself
-            this.classList.add('drag-over-element');
-        }
-    }
-
-    function handleDragLeave(e) {
-        e.preventDefault();
-        // Remove visual cue when dragging leaves the element
-        if (e.target === this) { // Only remove if leaving the element itself, not its children
-            this.classList.remove('drag-over-element');
-        }
-    }
-
-    function handleDrop(e) {
-        e.preventDefault();
-        e.stopPropagation(); // Prevent event from bubbling up
-
-        const targetElement = e.target.closest('.thumbnail');
-        if (!targetElement || draggedIndex === null) {
-             console.log('Drop event on invalid target or no dragged item.');
-             // Ensure drag-over style is removed if drop fails early
-             document.querySelectorAll('.thumbnail.drag-over-element').forEach(el => el.classList.remove('drag-over-element'));
-             return;
-        }
-
-        const targetIndex = parseInt(targetElement.dataset.index);
-        targetElement.classList.remove('drag-over-element'); // Remove highlight from drop target
-
-        if (targetIndex === draggedIndex) {
-             console.log('Dropped onto itself.');
-             return; // No change if dropped onto itself
-        }
-
-        console.log(`Drop - Dragged Index: ${draggedIndex}, Target Index: ${targetIndex}`);
-
-        // Reorder the imageEntries array
-        const draggedItem = imageEntries.splice(draggedIndex, 1)[0];
-        imageEntries.splice(targetIndex, 0, draggedItem);
-
-        // Re-render the gallery with the new order
-        displayImages();
-
-        showStatus('Gallery order updated (in memory)', 'success');
     }
 
     // Function to handle toggling selection state
@@ -2032,9 +2027,9 @@
         // Update modal info to include tags if they exist
         let infoText = `${entry.name} (${entry.size})`;
         
-        // Add tags if they exist
-        if (entry.keywords && entry.keywords.size > 0) {
-            const tagsList = Array.from(entry.keywords).join(', ');
+        // Add tags if they exist in the entry.tags array
+        if (Array.isArray(entry.tags) && entry.tags.length > 0) {
+            const tagsList = entry.tags.join(', '); // Join directly from the array
             infoText += `<div style="margin-top: 8px; font-size: 12px; color: #909090;">Tags: ${tagsList}</div>`;
         }
         
@@ -2101,7 +2096,6 @@
         try {
             await deleteImageFromDB(entry.id);
             imageEntries.splice(indexToDelete, 1);
-            originalOrder = imageEntries.map(e => ({...e})); // Update original order too
 
             closeModal(); // Close modal first
             displayImages(); // Redisplay remaining images
@@ -2518,12 +2512,6 @@
             showStatus('Gallery sorted by size', 'success');
         });
 
-        document.getElementById('restoreOrderBtn').addEventListener('click', () => {
-            imageEntries = [...originalOrder];
-            displayImages();
-            showStatus('Original order restored', 'success');
-        });
-
         // Thumbnail size control
         const thumbnailSize = document.getElementById('thumbnailSize');
         const sizeValue = document.getElementById('sizeValue');
@@ -2558,6 +2546,26 @@
         // Editor panel functions
         toggleEditorPanel(false);
 
+        // --- Custom Context Menu Listeners --- Start
+        galleryGrid.addEventListener('contextmenu', showContextMenu);
+        // Hide menu on regular click anywhere
+        document.addEventListener('click', (event) => {
+            // Hide if click is outside the context menu
+            if (customContextMenu && customContextMenu.style.display === 'block' && !customContextMenu.contains(event.target)) {
+                hideContextMenu();
+            }
+        });
+        // Hide menu on Escape key
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && customContextMenu && customContextMenu.style.display === 'block') {
+                hideContextMenu();
+            }
+        });
+
+        // Handle clicks on menu items
+        customContextMenu.addEventListener('click', handleContextMenuAction);
+        // --- Custom Context Menu Listeners --- End
+
         console.log('Event listeners setup complete');
     }
 
@@ -2577,7 +2585,6 @@
                 request.onsuccess = () => {
                     console.log('Image store cleared successfully');
                     imageEntries = [];
-                    originalOrder = [];
                     selectedIndices = []; // Reset selection when clearing
                     selectedFilterTags.clear(); // <<< Clear filter tags
                     updateSelectionUI();
@@ -2988,55 +2995,30 @@
                 continue;
             }
 
-            // --- Check if it's a PNG ---
-            // We need to infer type. Base64 data URLs start with 'data:image/png;base64,'
-            if (!entry.base64Data.startsWith('data:image/png;')) {
-                 console.log(`Skipping ${entry.name}: Not a PNG, cannot add tEXt metadata.`);
-                 errorCount++; // Count as error for now
-                 continue;
-            }
-
             try {
-                // 1. Convert Base64 to Blob
-                const response = await fetch(entry.base64Data);
-                if (!response.ok) throw new Error(`Fetch failed (status: ${response.status})`);
-                const blob = await response.blob();
-                const originalFile = new File([blob], entry.name || 'image.png', { type: 'image/png' });
+                // --- Simplified Tag Logic Start ---
+                // 1. Get existing tags from the entry's array
+                const existingTags = new Set(entry.tags || []); // Ensure it exists
 
-                // 2. Read existing metadata (specifically Keywords)
-                const existingMetadata = await pngMetadata.readMetadata(originalFile);
-                const existingKeywords = (existingMetadata['Keywords'] || '').split(',')
-                                         .map(k => k.trim()).filter(k => k !== '');
+                // 2. Merge tags (avoid duplicates, ensure lowercase)
+                tagsToAdd.forEach(tag => existingTags.add(tag.toLowerCase()));
+                const finalTags = Array.from(existingTags);
 
-                // 3. Merge tags (avoid duplicates, case-insensitive check might be good)
-                const newKeywordsSet = new Set(existingKeywords.map(k => k.toLowerCase()));
-                tagsToAdd.forEach(tag => newKeywordsSet.add(tag.toLowerCase()));
-                const finalKeywords = Array.from(newKeywordsSet).join(', ');
+                // 3. Prepare updated entry object with new tags array
+                const updatedEntry = { ...entry, tags: finalTags };
+                // --- Simplified Tag Logic End ---
 
-                // 4. Prepare metadata object to write
-                const metadataToWrite = { ...existingMetadata, 'Keywords': finalKeywords };
-
-                // 5. Write metadata back
-                const updatedBlob = await pngMetadata.writeMetadata(originalFile, metadataToWrite);
-
-                // 6. Convert updated Blob back to Base64
-                const updatedBase64Data = await blobToBase64(updatedBlob);
-
-                // 7. Update IndexedDB
+                // Update IndexedDB with the entry containing the new tags array
                 const transaction = db.transaction([IMAGE_STORE_NAME], 'readwrite');
                 const store = transaction.objectStore(IMAGE_STORE_NAME);
-                // Update the existing entry using its ID
-                const updatedEntry = { ...entry, base64Data: updatedBase64Data };
                 await new Promise((resolve, reject) => {
-                    const request = store.put(updatedEntry); // Use put to update based on keyPath 'id'
+                    const request = store.put(updatedEntry); // Use put with the updated entry
                     request.onsuccess = resolve;
                     request.onerror = () => reject(request.error);
                 });
 
-                // 8. Update in-memory array (important!)
+                // Update in-memory array (important!)
                 imageEntries[index] = updatedEntry;
-                // 9. Update the cached keywords Set
-                imageEntries[index].keywords = await getKeywordsFromEntry(updatedEntry);
 
                 successCount++;
                  showStatus(`Processing: ${i + 1}/${total}... (${successCount} success, ${errorCount} errors)`, 'info');
@@ -3067,6 +3049,9 @@
         });
         selectedIndices = [];
         updateSelectionUI(); // Update buttons to hide Tag Selected
+
+        // Refresh the tag list in the menu
+        await updateTagListDisplay(); // <<< ADD THIS LINE
 
         // Optional: Redisplay the affected thumbnails if metadata is shown there?
         // For now, the data is updated in IndexedDB and memory.
@@ -3161,26 +3146,26 @@
     // --- Tag List Display --- Start
 
     // Helper to get keywords Set from an image entry (Moved higher)
-    async function getKeywordsFromEntry(entry) {
-        const keywords = new Set();
-        if (entry && entry.base64Data && entry.base64Data.startsWith('data:image/png;')) {
-            try {
-                const response = await fetch(entry.base64Data);
-                if (!response.ok) throw new Error('Fetch failed');
-                const blob = await response.blob();
-                const tempFile = new File([blob], entry.name || 'image.png', { type: 'image/png' });
-                const metadata = await pngMetadata.readMetadata(tempFile);
-                const keywordsString = metadata['Keywords'] || '';
-                keywordsString.split(',')
-                    .map(k => k.trim().toLowerCase())
-                    .filter(k => k !== '')
-                    .forEach(tag => keywords.add(tag));
-            } catch (error) {
-                console.warn(`[getKeywordsFromEntry] Failed for ${entry.name}:`, error);
-            }
-        }
-        return keywords;
-    }
+    // async function getKeywordsFromEntry(entry) {
+    //     const keywords = new Set();
+    //     if (entry && entry.base64Data && entry.base64Data.startsWith('data:image/png;')) {
+    //         try {
+    //             const response = await fetch(entry.base64Data);
+    //             if (!response.ok) throw new Error('Fetch failed');
+    //             const blob = await response.blob();
+    //             const tempFile = new File([blob], entry.name || 'image.png', { type: 'image/png' });
+    //             const metadata = await pngMetadata.readMetadata(tempFile);
+    //             const keywordsString = metadata['Keywords'] || '';
+    //             keywordsString.split(',')
+    //                 .map(k => k.trim().toLowerCase())
+    //                 .filter(k => k !== '')
+    //                 .forEach(tag => keywords.add(tag));
+    //         } catch (error) {
+    //             console.warn(`[getKeywordsFromEntry] Failed for ${entry.name}:`, error);
+    //         }
+    //     }
+    //     return keywords;
+    // }
 
     async function updateTagListDisplay() {
         console.log("--- updateTagListDisplay START ---");
@@ -3196,28 +3181,34 @@
         tagsMenuSection.style.display = 'block'; // Ensure section is visible
 
         const allTags = new Set();
-        let pngCount = 0;
+        let pngCount = 0; // << Can remove this line
 
-        // Now uses the cached keywords
+        // Now uses the cached keywords << Update comment
         for (const entry of imageEntries) {
-            if (entry && entry.keywords) { // Check if keywords Set exists
-                if (entry.base64Data && entry.base64Data.startsWith('data:image/png;')) {
-                    pngCount++;
-                }
-                entry.keywords.forEach(tag => allTags.add(tag)); // Add directly from Set
+            // if (entry && entry.keywords) { // Check if keywords Set exists << DELETE THIS BLOCK
+            //     if (entry.base64Data && entry.base64Data.startsWith('data:image/png;')) {
+            //         pngCount++;
+            //     }
+            //     entry.keywords.forEach(tag => allTags.add(tag)); // Add directly from Set
+            // }
+            // Instead, read from entry.tags array
+            if (entry && Array.isArray(entry.tags)) {
+                entry.tags.forEach(tag => allTags.add(tag.toLowerCase())); // Ensure lowercase
             }
         }
-        console.log(`[Tag List] Using cached keywords. Found ${allTags.size} unique tags from ${pngCount} PNGs.`);
+        // console.log(`[Tag List] Using cached keywords. Found ${allTags.size} unique tags from ${pngCount} PNGs.`); << Update log
+        console.log(`[Tag List] Found ${allTags.size} unique tags across all images.`);
 
         // Clear loading/previous content
         tagListContainer.innerHTML = '';
 
         if (allTags.size === 0) {
-            if (pngCount === 0) {
-                 tagListContainer.innerHTML = '<span style="color: #909090; font-size: 12px; width: 100%;">No PNG images found.</span>';
-            } else {
-                 tagListContainer.innerHTML = '<span style="color: #909090; font-size: 12px; width: 100%;">No tags found in PNG images.</span>';
-            }
+            // if (pngCount === 0) { << DELETE THIS BLOCK
+            //      tagListContainer.innerHTML = '<span style="color: #909090; font-size: 12px; width: 100%;">No PNG images found.</span>';
+            // } else {
+            //      tagListContainer.innerHTML = '<span style="color: #909090; font-size: 12px; width: 100%;">No tags found in PNG images.</span>';
+            // }
+            tagListContainer.innerHTML = '<span style="color: #909090; font-size: 12px; width: 100%;">No tags found. Add tags using the bulk tag feature.</span>';
             // Optionally hide the whole section if no tags:
             // tagsMenuSection.style.display = 'none';
         } else {
@@ -3444,6 +3435,138 @@
             zoomState = 'normal';
         }
     }
+
+    // --- Custom Context Menu Logic --- Start
+    function showContextMenu(event) {
+        event.preventDefault(); // Prevent default browser menu
+
+        const thumbnail = event.target.closest('.thumbnail');
+        if (!thumbnail) {
+            hideContextMenu(); // Hide if click wasn't on a thumbnail
+            return;
+        }
+
+        contextMenuTargetIndex = parseInt(thumbnail.dataset.index);
+        if (isNaN(contextMenuTargetIndex)) {
+            hideContextMenu();
+            return;
+        }
+
+        // Basic positioning (adjust as needed)
+        const clickX = event.clientX;
+        const clickY = event.clientY;
+
+        customContextMenu.style.left = `${clickX}px`;
+        customContextMenu.style.top = `${clickY}px`;
+        customContextMenu.style.display = 'block';
+
+        // TODO: Add logic to disable/enable items based on selection state?
+        // For now, all items are visible
+    }
+
+    function hideContextMenu() {
+        if (customContextMenu) {
+            customContextMenu.style.display = 'none';
+        }
+        contextMenuTargetIndex = -1;
+    }
+    // --- Custom Context Menu Logic --- End
+
+    // --- Handle Context Menu Item Clicks --- Start
+    async function handleContextMenuAction(event) {
+        const actionItem = event.target.closest('li[data-action]');
+        if (!actionItem || contextMenuTargetIndex === -1) {
+            hideContextMenu();
+            return;
+        }
+
+        const action = actionItem.dataset.action;
+        const targetIndex = contextMenuTargetIndex; // Use stored index
+
+        // Ensure the index is valid before proceeding
+        if (targetIndex < 0 || targetIndex >= imageEntries.length) {
+            console.error('Invalid target index for context menu action:', targetIndex);
+            hideContextMenu();
+            return;
+        }
+
+        hideContextMenu(); // Hide menu immediately after action selected
+
+        console.log(`Context menu action: '${action}' on index: ${targetIndex}`);
+
+        switch (action) {
+            case 'view':
+                showFullImage(targetIndex);
+                break;
+            case 'select':
+                // Enter select mode if not already active
+                if (!isSelectModeActive) {
+                    enterSelectMode();
+                }
+                // Toggle selection for the target item
+                toggleSelection(targetIndex);
+                break;
+            case 'tag':
+                // Ensure the target item is selected first
+                if (!selectedIndices.includes(targetIndex)) {
+                    // Enter select mode if necessary
+                    if (!isSelectModeActive) {
+                        enterSelectMode();
+                    }
+                    toggleSelection(targetIndex);
+                }
+                // Open the bulk tag modal (it will operate on current selection)
+                openBulkTagModal();
+                break;
+            case 'download':
+                // Directly download the target image
+                const entryToDownload = imageEntries[targetIndex];
+                if (entryToDownload && entryToDownload.base64Data && entryToDownload.name) {
+                    try {
+                        const link = document.createElement('a');
+                        link.href = entryToDownload.base64Data;
+                        link.download = entryToDownload.name;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        console.log(`Download triggered for: ${entryToDownload.name}`);
+                    } catch (error) {
+                        console.error(`Error triggering download for ${entryToDownload.name}:`, error);
+                        showStatus(`Error downloading ${entryToDownload.name}: ${error.message}`, 'error');
+                    }
+                } else {
+                    showStatus('Cannot download: Image data missing.', 'error');
+                }
+                break;
+            case 'delete':
+                // Confirm and delete the target image
+                const entryToDelete = imageEntries[targetIndex];
+                if (confirm(`Are you sure you want to delete ${entryToDelete.name}?`)) {
+                    try {
+                        await deleteImageFromDB(entryToDelete.id);
+                        imageEntries.splice(targetIndex, 1);
+                        // Deselect if it was selected
+                        const selectionIndex = selectedIndices.indexOf(targetIndex);
+                        if (selectionIndex > -1) {
+                            selectedIndices.splice(selectionIndex, 1);
+                        }
+                        // Adjust subsequent selected indices
+                        selectedIndices = selectedIndices.map(idx => idx > targetIndex ? idx - 1 : idx);
+                        displayImages(); // Redisplay remaining images
+                        updateSelectionUI();
+                        await updateTagListDisplay();
+                        showStatus('Image deleted successfully', 'success');
+                    } catch (error) {
+                        showStatus('Failed to delete image: ' + error.message, 'error');
+                    }
+                }
+                break;
+            default:
+                console.warn('Unknown context menu action:', action);
+        }
+    }
+    // --- Handle Context Menu Item Clicks --- End
+
     </script>
 </body>
 </html> 
