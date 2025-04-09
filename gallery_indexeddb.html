@@ -973,7 +973,7 @@
         }
 
         .custom-context-menu li {
-            padding: 10px 15px;
+            padding: 12px 15px; /* Increased padding for better touch targets */
             color: #e0e0e0;
             cursor: pointer;
             display: flex;
@@ -1007,6 +1007,24 @@
 
         .custom-context-menu li.disabled:hover i {
             color: #909090; /* Keep icon color disabled */
+        }
+
+        /* Mobile-specific styling */
+        @media (max-width: 768px) {
+            .custom-context-menu {
+                min-width: 200px; /* Wider on mobile */
+                max-width: 80%; /* Limit width on small screens */
+            }
+            
+            .custom-context-menu li {
+                padding: 16px; /* Even larger touch targets on mobile */
+                font-size: 16px; /* Larger text */
+            }
+            
+            .custom-context-menu li i {
+                width: 20px; /* Larger icons */
+                font-size: 18px;
+            }
         }
     </style>
     <!-- End Custom Context Menu Styles -->
@@ -1329,7 +1347,7 @@
 
     // Constants for IndexedDB
     const DB_NAME = 'imageGalleryDB';
-    const DB_VERSION = 3; // Increment version
+    const DB_VERSION = 4; // Increment version to match existing database
     const IMAGE_STORE_NAME = 'images';
     
     // File validation constants
@@ -1344,6 +1362,7 @@
     let selectedIndices = []; // Added for multi-select
     let selectedFilterTags = new Set(); // Added for tag filtering
     let loadingToastId = null; // Added to track the loading status toast
+    let hasUserInteracted = false; // Track user interaction for vibration API
 
     // --- Selection Mode State ---
     let isSelectModeActive = false;
@@ -1507,6 +1526,19 @@
             setupEventListeners(); // Existing listeners
             setupBulkTagListeners(); // Add bulk tag listeners
             updateButtonText();
+            
+            // Show mobile usage tip for first-time visitors on mobile devices
+            const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            const mobileTipShown = localStorage.getItem('mobileTipShown');
+            
+            if (isMobileDevice && !mobileTipShown) {
+                // Show tip after a short delay to ensure everything is loaded
+                setTimeout(() => {
+                    showStatus('Tip: Long-press on an image to open the menu', 'info', { persistent: true });
+                    localStorage.setItem('mobileTipShown', 'true');
+                }, 1500);
+            }
+            
             showStatus('Gallery initialized successfully', 'success');
         } catch (error) {
             showStatus('Failed to initialize gallery: ' + error.message, 'error');
@@ -2220,6 +2252,19 @@
     function setupEventListeners() {
         console.log('Setting up event listeners...');
 
+        // Track first user interaction for vibration API
+        document.addEventListener('click', function setUserInteracted() {
+            hasUserInteracted = true;
+            // Remove this listener after first interaction
+            document.removeEventListener('click', setUserInteracted);
+        }, { once: true });
+        
+        document.addEventListener('touchstart', function setUserInteracted() {
+            hasUserInteracted = true;
+            // Remove this listener after first interaction
+            document.removeEventListener('touchstart', setUserInteracted);
+        }, { once: true });
+
         // Add throttle/debounce utility function
         function throttle(func, limit) {
             let inThrottle;
@@ -2282,6 +2327,7 @@
         let touchStartTimestamp;
         let touchStartTarget;
         let touchTimer;
+        let touchStartX, touchStartY; // Track initial touch position for context menu
 
         galleryGrid.addEventListener('touchstart', (event) => {
             // Find closest thumbnail parent (if any)
@@ -2291,6 +2337,12 @@
             // Store reference to avoid issues with touch moving to a different element
             touchStartTarget = thumbnail;
             touchStartTimestamp = Date.now();
+            
+            // Store touch position for potential context menu
+            if (event.touches && event.touches.length) {
+                touchStartX = event.touches[0].clientX;
+                touchStartY = event.touches[0].clientY;
+            }
             
             // If multiple fingers are used (e.g., pinch zoom), don't start long press
             if (event.touches.length > 1) {
@@ -2304,11 +2356,28 @@
             // Start long press timer
             touchTimer = setTimeout(() => {
                 console.log('[Long Press Timer] Fired.');
-                if (!isSelectModeActive) {
-                    console.log('[Long Press] Entering select mode and selecting.');
-                    enterSelectMode();
+                
+                // Create a synthetic event for the context menu
+                const contextEvent = new Event('contextmenu', { bubbles: true, cancelable: true });
+                
+                // Add position properties from the original touch
+                contextEvent.clientX = touchStartX;
+                contextEvent.clientY = touchStartY;
+                contextEvent.touches = [{ clientX: touchStartX, clientY: touchStartY }];
+                
+                // Dispatch the context menu event
+                thumbnail.dispatchEvent(contextEvent);
+                
+                // Only attempt vibration if user has already interacted with the page
+                // This prevents browser security warnings
+                if (hasUserInteracted && navigator.vibrate) {
+                    try {
+                        navigator.vibrate(50);
+                    } catch (e) {
+                        // Ignore errors - vibration is just an enhancement
+                        console.log('Vibration failed:', e);
+                    }
                 }
-                toggleSelection(index);
             }, 500); // 500ms for long press
             
             // Prevent default context menu
@@ -2320,9 +2389,12 @@
             
             if (!thumbnail) return; // Not a valid touch sequence
             
-            clearTimeout(touchTimer); // Always clear the timer
-            
+            // Clear timer and get duration
+            clearTimeout(touchTimer);
             const touchDuration = Date.now() - touchStartTimestamp;
+            
+            // Only trigger click action for short touches
+            // Longer touches are handled by the long press timeout
             if (touchDuration < 500) { // Short touch - treat as click
                 const index = parseInt(thumbnail.dataset.index);
                 if (isNaN(index)) return; // Invalid index
@@ -2337,10 +2409,26 @@
             // Reset touch tracking
             touchStartTarget = null;
             touchStartTimestamp = 0;
+            touchStartX = undefined;
+            touchStartY = undefined;
+            
+            // Prevent default to avoid unintended actions
+            event.preventDefault();
         });
 
-        galleryGrid.addEventListener('touchmove', () => {
-            clearTimeout(touchTimer); // Cancel long press if touch moves
+        galleryGrid.addEventListener('touchmove', (event) => {
+            // Calculate how far the touch has moved
+            if (event.touches && event.touches.length && touchStartX !== undefined && touchStartY !== undefined) {
+                const moveX = Math.abs(event.touches[0].clientX - touchStartX);
+                const moveY = Math.abs(event.touches[0].clientY - touchStartY);
+                
+                // If moved more than 10px in any direction, cancel long press
+                if (moveX > 10 || moveY > 10) {
+                    clearTimeout(touchTimer);
+                }
+            } else {
+                clearTimeout(touchTimer); // Cancel if we can't determine movement
+            }
         });
 
         // File selection handling
@@ -2555,6 +2643,16 @@
                 hideContextMenu();
             }
         });
+        // Also hide menu on touch events outside the menu (for mobile)
+        document.addEventListener('touchstart', (event) => {
+            // Only check if menu is currently visible
+            if (customContextMenu && customContextMenu.style.display === 'block') {
+                // Check if the touch is outside the menu
+                if (!customContextMenu.contains(event.target)) {
+                    hideContextMenu();
+                }
+            }
+        });
         // Hide menu on Escape key
         document.addEventListener('keydown', (event) => {
             if (event.key === 'Escape' && customContextMenu && customContextMenu.style.display === 'block') {
@@ -2564,6 +2662,15 @@
 
         // Handle clicks on menu items
         customContextMenu.addEventListener('click', handleContextMenuAction);
+        // Also handle touch events on menu items (for mobile)
+        customContextMenu.addEventListener('touchend', (event) => {
+            // Prevent default to avoid double-firing with click event
+            event.preventDefault();
+            // Only process if this is a clean touch (not a scroll, etc.)
+            if (event.changedTouches && event.changedTouches.length === 1) {
+                handleContextMenuAction(event);
+            }
+        });
         // --- Custom Context Menu Listeners --- End
 
         console.log('Event listeners setup complete');
@@ -3452,16 +3559,37 @@
             return;
         }
 
-        // Basic positioning (adjust as needed)
-        const clickX = event.clientX;
-        const clickY = event.clientY;
+        // Get cursor position for desktop or touch position for mobile
+        let posX, posY;
+        
+        if (event.touches && event.touches.length) {
+            // Touch event on mobile
+            posX = event.touches[0].clientX;
+            posY = event.touches[0].clientY;
+        } else {
+            // Mouse event on desktop
+            posX = event.clientX;
+            posY = event.clientY;
+        }
 
-        customContextMenu.style.left = `${clickX}px`;
-        customContextMenu.style.top = `${clickY}px`;
+        // Position the menu, with boundary checking
+        const menuWidth = customContextMenu.offsetWidth || 200; // Fallback width if not yet displayed
+        const menuHeight = customContextMenu.offsetHeight || 200; // Fallback height
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+
+        // Adjust position if menu would go off-screen
+        if (posX + menuWidth > windowWidth) {
+            posX = windowWidth - menuWidth - 10; // Keep 10px margin
+        }
+        
+        if (posY + menuHeight > windowHeight) {
+            posY = windowHeight - menuHeight - 10; // Keep 10px margin
+        }
+
+        customContextMenu.style.left = `${posX}px`;
+        customContextMenu.style.top = `${posY}px`;
         customContextMenu.style.display = 'block';
-
-        // TODO: Add logic to disable/enable items based on selection state?
-        // For now, all items are visible
     }
 
     function hideContextMenu() {
