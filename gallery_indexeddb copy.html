@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Image Gallery (IndexedDB)</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖼️</text></svg>">
+    <!-- Font Awesome CSS link removed. Content could not be fetched to be embedded.
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    -->
     <!-- Load PNG libraries from local files -->
     <style>
         * {
@@ -1305,44 +1307,269 @@
 
     <script>
     // Modify PNGMetadata class to use tEXt-parser
+
+    // Embedded tEXt-parser.js content:
+    (function(global, factory) {
+      typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() : typeof define === 'function' && define.amd ? define(factory) : global.tEXt = factory();
+    })(this, function() {
+      'use strict'; // Corrected escaping
+      var CHUNK_TYPE = [ 116, 69, 88, 116 ];
+      var IEND_TYPE = [ 73, 69, 78, 68 ];
+      var PNG_HEAD = [ 137, 80, 78, 71, 13, 10, 26, 10 ];
+      function tEXt() {}
+      tEXt.encode = function encode(values, buf) {
+        var png = new Uint8Array(buf);
+        var i = 8; // Start after PNG header [137, 80, 78, 71, 13, 10, 26, 10]
+        var head = png.slice(0, 8);
+        var tail = null; // To store the IEND chunk's full data
+        var outChunks = []; // Array to hold the Uint8Arrays of chunks to keep/add
+
+        outChunks.push(head); // Start with the PNG header
+
+        var keys = Object.keys(values);
+
+        // Loop through existing chunks
+        while (i < png.length) {
+          // Read chunk header
+          var length = (png[i] << 24 | png[i+1] << 16 | png[i+2] << 8 | png[i+3]) >>> 0;
+          var typeBytes = png.slice(i + 4, i + 8);
+          var typeName = String.fromCharCode.apply(null, typeBytes);
+          var chunkFullData = png.slice(i, i + 12 + length); // Get the complete chunk (length+type+data+crc)
+
+          var nextChunkPos = i + 12 + length;
+          // Sanity check for chunk position
+          if (nextChunkPos > png.length) {
+              console.error("PNG parsing error: Chunk position exceeds buffer length.", { index: i, length: length, type: typeName, bufferLength: png.length });
+              throw new Error("PNG parsing error: Chunk position exceeds buffer length.");
+          }
+          i = nextChunkPos; // Move index to the next chunk
+
+          if (typeName === 'IEND') {
+            tail = chunkFullData; // Found the end chunk, store it
+            break; // Stop processing chunks after IEND
+          }
+
+          // Handle tEXt chunks: keep only if keyword is not in the new 'values'
+          if (typeName === 'tEXt') {
+            var dataPart = chunkFullData.slice(8, chunkFullData.length - 4); // Extract data part
+            var k = 0;
+            while (k < dataPart.length && dataPart[k] !== 0) { k++; } // Find null separator
+
+            if (k < dataPart.length) { // Check if null separator found
+              var keyword = String.fromCharCode.apply(null, dataPart.slice(0, k));
+              // Only keep this chunk if its keyword is NOT among the keys we intend to write/overwrite
+              if (keys.indexOf(keyword) === -1) {
+                 outChunks.push(chunkFullData);
+              }
+              // If the keyword IS in keys, we intentionally discard the old chunk here.
+              // The loop later will add the new chunk if the value is non-empty.
+            } else {
+               // Malformed tEXt chunk? Keep it just in case.
+               console.warn("Malformed tEXt chunk found (no null separator), keeping it.");
+               outChunks.push(chunkFullData);
+            }
+          } else {
+            // Keep all other chunk types (IDAT, PLTE, IHDR etc.)
+            outChunks.push(chunkFullData);
+          }
+        }
+
+        // Add the new/updated tEXt chunks
+        for (var j = 0; j < keys.length; j++) {
+          var key = keys[j];
+          // Only add if the value is non-empty
+          if (values[key] && values[key].trim() !== '' && key.trim() !== '') {
+             try {
+               outChunks.push(this.pack(key.trim(), values[key].trim()));
+             } catch (packError) {
+                console.error("Error packing tEXt chunk for keyword '" + key + "':", packError);
+                // Decide if you want to throw or just skip this key
+                // throw packError; // Option: Stop encoding
+             }
+          }
+        }
+
+        // Append the IEND chunk data
+        if (tail === null) {
+          console.error("Original PNG data seems to be missing the IEND chunk.");
+          throw new Error('Failed to find IEND chunk in original PNG data. Cannot re-encode.'); // Corrected escaping
+        }
+        outChunks.push(tail);
+
+        // Calculate total length and assemble the new PNG bytes
+        var totalLength = 0;
+        for (var c = 0; c < outChunks.length; c++) {
+          if (outChunks[c] === null || !(outChunks[c] instanceof Uint8Array)) {
+              console.error("Invalid chunk found in outChunks at index " + c + ":", outChunks[c]);
+              throw new Error("Internal error: Invalid chunk data during PNG assembly.");
+          }
+          totalLength += outChunks[c].length;
+        }
+
+        var newPngBytes = new Uint8Array(totalLength);
+        var offset = 0;
+        for (var c = 0; c < outChunks.length; c++) {
+          newPngBytes.set(outChunks[c], offset);
+          offset += outChunks[c].length;
+        }
+
+        return newPngBytes; // Return the raw bytes of the new PNG
+      };
+      tEXt.decode = function decode(buf) {
+        var png = new Uint8Array(buf);
+        var i = 0;
+        var header = png.slice(i, i += 8);
+        for (var j = 0; j < PNG_HEAD.length; j++) {
+          if (header[j] !== PNG_HEAD[j]) {
+            throw new Error('Invalid PNG header'); // Corrected escaping
+          }
+        }
+        var chunks = [];
+        while (i < png.length) {
+          var length = (png[i++] << 24 | png[i++] << 16 | png[i++] << 8 | png[i++]) >>> 0;
+          var type = png.slice(i, i += 4);
+          var chunkData = png.slice(i, i += length);
+          var crc = png.slice(i, i += 4);
+          var typeName = ''; // Corrected escaping
+          for (var j = 0; j < type.length; j++) {
+            typeName += String.fromCharCode(type[j]);
+          }
+          var chunk = {
+            length: length,
+            type: typeName,
+            data: new Uint8Array(length + 12)
+          };
+          var off = 0;
+          chunk.data[off++] = length >> 24 & 255;
+          chunk.data[off++] = length >> 16 & 255;
+          chunk.data[off++] = length >> 8 & 255;
+          chunk.data[off++] = length & 255;
+          chunk.data[off++] = type[0];
+          chunk.data[off++] = type[1];
+          chunk.data[off++] = type[2];
+          chunk.data[off++] = type[3];
+          for (var j = 0; j < chunkData.length; j++) {
+            chunk.data[off++] = chunkData[j];
+          }
+          chunk.data[off++] = crc[0];
+          chunk.data[off++] = crc[1];
+          chunk.data[off++] = crc[2];
+          chunk.data[off++] = crc[3];
+          chunks.push(chunk);
+        }
+        var values = {};
+        for (var i = 0; i < chunks.length; i++) {
+          var chunk = chunks[i];
+          if (chunk.type !== 'tEXt') { // Corrected escaping
+            continue;
+          }
+          var data = chunk.data.slice(8, chunk.data.length - 4);
+          var k = 0;
+          while (data[k]) {
+            k++;
+          }
+          var keyword = String.fromCharCode.apply(null, data.slice(0, k));
+          var text = String.fromCharCode.apply(null, data.slice(k + 1));
+          values[keyword] = text;
+        }
+        return values;
+      };
+      tEXt.pack = function pack(keyword, text) {
+        if (!keyword) {
+          throw new Error('cannot pack tEXt chunk without keyword'); // Corrected escaping
+        }
+        var key = new Uint8Array(keyword.length);
+        for (var i = 0; i < keyword.length; i++) {
+          key[i] = keyword.charCodeAt(i);
+          if (key[i] > 127 || key[i] < 32) {
+            throw new Error('keywords must be latin-1 characters'); // Corrected escaping
+          }
+        }
+        var txt = new Uint8Array(text.length);
+        for (var i = 0; i < text.length; i++) {
+          txt[i] = text.charCodeAt(i);
+        }
+        var length = key.length + txt.length + 1;
+        var chunkData = new Uint8Array(length);
+        var off = 0;
+        for (var i = 0; i < key.length; i++) {
+          chunkData[off++] = key[i];
+        }
+        chunkData[off++] = 0;
+        for (var i = 0; i < txt.length; i++) {
+          chunkData[off++] = txt[i];
+        }
+        var type = new Uint8Array(4);
+        for (var i = 0; i < CHUNK_TYPE.length; i++) {
+          type[i] = CHUNK_TYPE[i];
+        }
+        var data = new Uint8Array(length + 12);
+        var off = 0;
+        data[off++] = length >> 24 & 255;
+        data[off++] = length >> 16 & 255;
+        data[off++] = length >> 8 & 255;
+        data[off++] = length & 255;
+        data[off++] = type[0];
+        data[off++] = type[1];
+        data[off++] = type[2];
+        data[off++] = type[3];
+        for (var i = 0; i < chunkData.length; i++) {
+          data[off++] = chunkData[i];
+        }
+        var crcTable = [];
+        var c;
+        for (var n = 0; n < 256; n++) {
+          c = n;
+          for (var k = 0; k < 8; k++) {
+            c = c & 1 ? 3988292384 ^ c >>> 1 : c >>> 1;
+          }
+          crcTable[n] = c;
+        }
+        var crc = -1;
+        for (var i = 4; i < length + 8; i++) {
+          crc = crcTable[(crc ^ data[i]) & 255] ^ crc >>> 8;
+        }
+        crc = crc ^ -1;
+        data[off++] = crc >> 24 & 255;
+        data[off++] = crc >> 16 & 255;
+        data[off++] = crc >> 8 & 255;
+        data[off++] = crc & 255;
+        return data;
+      };
+      return tEXt;
+    });
+    // End of embedded tEXt-parser.js
+
     class PNGMetadata {
         constructor() {
-            console.log('PNGMetadata constructor called (using tEXt-parser).');
+            console.log('PNGMetadata constructor called (using tEXt-parser).'); // Correct escaping
             // Use a promise to ensure the library loads before use with a timeout
             this.libraryPromise = new Promise((resolve, reject) => {
                 // Check if library is already loaded
                 if (window.tEXt) {
-                    console.log('tEXt-parser library already loaded.');
+                    console.log('tEXt-parser library already loaded.'); // Correct escaping
                     resolve(window.tEXt);
                     return;
                 }
-                console.log('Attempting to load tEXt-parser library...');
+                console.log('Attempting to load tEXt-parser library...'); // Correct escaping
                 
                 // Add a timeout to prevent hanging if script fails
                 const timeoutId = setTimeout(() => {
-                    reject(new Error('tEXt-parser library load timeout after 5000ms'));
+                    reject(new Error('tEXt-parser library load timeout after 5000ms')); // Correct escaping
                 }, 5000);
                 
-                // Dynamically load the library script
-                const script = document.createElement('script');
-                script.src = 'js/tEXt-parser.js'; // Path to the new library
-                script.onload = () => {
-                    clearTimeout(timeoutId);
-                    console.log('tEXt-parser script onload event fired. window.tEXt:', window.tEXt);
-                    if (window.tEXt && typeof window.tEXt.decode === 'function' && typeof window.tEXt.encode === 'function') {
-                        console.log('tEXt-parser library loaded successfully.');
-                        resolve(window.tEXt);
-                    } else {
-                        console.error('tEXt-parser script loaded, but window.tEXt or its methods are invalid.');
-                        reject(new Error('tEXt-parser library failed to initialize properly'));
-                    }
-                };
-                script.onerror = (err) => {
-                    clearTimeout(timeoutId);
-                    console.error('Failed to load tEXt-parser library script:', err);
-                    reject(new Error('Failed to load tEXt-parser library script'));
-                };
-                document.head.appendChild(script);
+                // Since the script is embedded, we can check for window.tEXt directly.
+                // However, the embedding happens *before* this class constructor is called
+                // during the initial script execution. So, window.tEXt should be available.
+                if (window.tEXt && typeof window.tEXt.decode === 'function' && typeof window.tEXt.encode === 'function') {
+                    console.log('Embedded tEXt-parser library confirmed.'); // Correct escaping
+                    clearTimeout(timeoutId); // Clear timeout as it's available
+                    resolve(window.tEXt);
+                } else {
+                    console.error('Embedded tEXt-parser library not found or invalid.'); // Correct escaping
+                    clearTimeout(timeoutId); // Clear timeout
+                    reject(new Error('Embedded tEXt-parser library failed to initialize properly')); // Correct escaping
+                }
             });
         }
 
@@ -3675,69 +3902,64 @@
     function setupImageZoom() {
         let clickTimer = null;
         let currentScale = 1.0;
-        // currentTx and currentTy will store the translation of the image
-        let currentTx = 0; 
+        let currentTx = 0; // Keep track for panning (optional future feature) or resetting
         let currentTy = 0;
         let pinchStartDistance = 0;
         let pinchStartScale = 1.0;
-        
+        // No longer need pinchStartMidpoint, pinchStartTx, pinchStartTy with origin approach
+
         let isPinching = false;
-        let isTransformScheduled = false; // RAF flag, though currently direct application is used
+        let isTransformScheduled = false; // RAF flag
 
-        // New state variables for panning
-        let isPanning = false;
-        let panStartX = 0, panStartY = 0; // Touch start position for panning
-        let panStartTx = 0, panStartTy = 0; // Image translation at pan start
+        // --- RAF Callback ---
+        function updateTransform() {
+            // Apply the latest calculated scale directly (no transition during pinch)
+            // Translation is implicitly handled by the transform-origin set in onTouchStart
+            const scale = Math.max(1.0, currentScale); // Ensure scale doesn't go below 1
 
+            modalImage.style.transform = `scale(${scale})`; // Only apply scale
 
-        // --- RAF Callback (Currently not used by pinch, direct application in onTouchMove) ---
-        // function updateTransform() {
-        //     const scale = Math.max(1.0, currentScale);
-        //     modalImage.style.transform = `translate(${currentTx}px, ${currentTy}px) scale(${scale})`;
-        //     if (isPinching) {
-        //         modalImage.style.cursor = 'grabbing';
-        //     }
-        //     isTransformScheduled = false;
-        // }
-
-        // function scheduleTransform() {
-        //     if (!isTransformScheduled) {
-        //         isTransformScheduled = true;
-        //         requestAnimationFrame(updateTransform);
-        //     }
-        // }
-
-        // --- Apply final transform with transition (resetting origin if specified) ---
-        function applyFinalZoomTransform(resetOrigin = true) {
-            currentScale = Math.max(1.0, currentScale); 
-
-            if (resetOrigin) { 
-                currentTx = 0;
-                currentTy = 0;
-                modalImage.style.transformOrigin = 'center center';
+            // Update cursor only if pinching
+            if (isPinching) {
+                modalImage.style.cursor = 'grabbing';
             }
-            
+
+            isTransformScheduled = false; // Allow next frame request
+        }
+
+        // --- Apply final transform with transition (resetting origin) ---
+        function applyFinalZoomTransform(resetOrigin = true) {
+            // Ensure final scale is constrained
+            currentScale = Math.max(1.0, currentScale);
+
+            // Reset translation if scale is 1
             if (Math.abs(currentScale - 1.0) < 0.01) {
                 currentTx = 0;
                 currentTy = 0;
-                if (resetOrigin || modalImage.style.transformOrigin !== 'center center') {
-                    // Ensure origin is center if scale is 1, especially if it was changed by pinch
-                    modalImage.style.transformOrigin = 'center center';
-                }
+            } else {
+                // If keeping existing translation (e.g., after panning in future)
+                // We might need to adjust it if the origin changes here
+                // For now, simple zooms reset translation
+                 if (resetOrigin) {
+                     currentTx = 0;
+                     currentTy = 0;
+                 }
             }
 
+            // Apply with transition and reset origin for tap zooms
             modalImage.style.transition = 'transform 0.2s ease-out';
-            modalImage.style.transform = `translate(${currentTx}px, ${currentTy}px) scale(${currentScale})`;
+            if (resetOrigin) {
+                modalImage.style.transformOrigin = 'center center'; // Use center for tap zooms
+            }
+            // Apply final transform (potentially just scale if origin handled pinch)
+            // Or include translation if needed (e.g., after panning or tap zooms)
+             modalImage.style.transform = `translate(${currentTx}px, ${currentTy}px) scale(${currentScale})`;
 
-            // Update cursor and is-zoomed class based on final state (if not actively gesturing)
-            if (!isPinching && !isPanning) {
-                if (currentScale > 1.01) {
-                    modalImage.style.cursor = 'grab'; 
-                    modalImage.classList.add('is-zoomed');
-                } else {
-                    modalImage.style.cursor = 'zoom-in';
-                    modalImage.classList.remove('is-zoomed');
-                }
+            // Update cursor based on final zoom level
+            if (currentScale > 1.0) {
+                modalImage.style.cursor = 'zoom-out';
+            } else {
+                modalImage.style.cursor = 'zoom-in';
             }
         }
 
@@ -3748,49 +3970,49 @@
             currentTx = 0;
             currentTy = 0;
             isPinching = false;
-            isPanning = false; // Reset panning state
             pinchStartDistance = 0;
-            // isTransformScheduled = false; // Not strictly needed if not using RAF here
+            isTransformScheduled = false; // Reset RAF flag
 
-            modalImage.style.transition = 'none'; // Apply reset directly
-            applyFinalZoomTransform(true); // Resets origin to center, tx/ty to 0, scale to 1, and sets correct cursor
+            // Apply transform directly without transition on reset
+            modalImage.style.transition = 'none';
+            modalImage.style.transformOrigin = 'center center'; // Ensure origin is center on reset
+            applyFinalZoomTransform(true); // Applies transform, sets correct cursor, resets origin
         }
 
         // --- Tap/Double-Tap Handlers ---
         function handleModalImageClick(e) {
             e.stopPropagation();
-            // Only trigger if not panning, pinching, or if a transform isn't imminently scheduled by a gesture
-            if (isPinching || isPanning ) return; // Removed isTransformScheduled as it's not reliably set without RAF
+            // Ignore clicks during pinch or if transform is still being scheduled by pinch
+            if (isPinching || isTransformScheduled) return;
 
             if (clickTimer === null) {
                 clickTimer = setTimeout(() => {
-                    clickTimer = null; 
-                    if (currentScale <= 1.01) { 
+                    if (currentScale <= 1.01) { // Allow for slight float inaccuracies
                         currentScale = 1.5;
                     } else {
                         currentScale = 1.0;
                     }
                     // Tap zooms reset translation and use center origin
-                    currentTx = 0; currentTy = 0; 
                     applyFinalZoomTransform(true);
+                    clickTimer = null;
                 }, 250);
             }
         }
 
         function handleModalImageDblClick(e) {
             e.stopPropagation();
-            if (isPinching || isPanning) return; // Removed isTransformScheduled
+             // Ignore double clicks during pinch or if transform is still being scheduled by pinch
+            if (isPinching || isTransformScheduled) return;
 
             clearTimeout(clickTimer);
             clickTimer = null;
 
-            if (currentScale < 1.99) { 
+            if (currentScale < 1.99) { // Allow for float inaccuracies
                 currentScale = 2.0;
             } else {
                 currentScale = 1.0;
             }
-            // Double tap zooms reset translation and use center origin
-            currentTx = 0; currentTy = 0; 
+             // Double tap zooms reset translation and use center origin
             applyFinalZoomTransform(true);
         }
 
@@ -3811,105 +4033,114 @@
         }
 
         function onTouchStart(e) {
-            if (e.target !== modalImage) return;
-
-            if (e.touches.length === 2) { // PINCH START
-                e.preventDefault();
+             // Only handle pinch (2 fingers) on the image itself
+            if (e.target === modalImage && e.touches.length === 2) {
+                e.preventDefault(); // Prevent page scroll/zoom during pinch
                 isPinching = true;
-                isPanning = false; // Ensure panning stops
-                clearTimeout(clickTimer); clickTimer = null;
-
                 pinchStartDistance = getDistance(e.touches);
                 pinchStartScale = currentScale;
 
-                // If starting zoom from 1x, set transform origin to pinch midpoint for intuitive zoom-from-touch
-                // Also, reset currentTx/Ty because the origin will handle the perceived translation during scale.
-                if (Math.abs(pinchStartScale - 1.0) < 0.01) {
+                // --- Conditionally Set Transform Origin --- {{ edit_1 }}
+                if (Math.abs(pinchStartScale - 1.0) < 0.01) { // Check if starting scale is effectively 1.0
+                    // Start is 1x: Set origin to pinch midpoint for intuitive zoom-from-touch
                     const midpoint = getMidpoint(e.touches);
                     const rect = modalImage.getBoundingClientRect();
                     const originX = midpoint.x - rect.left;
                     const originY = midpoint.y - rect.top;
                     modalImage.style.transformOrigin = `${originX}px ${originY}px`;
-                    currentTx = 0; // Reset translation as origin takes over for 1x zoom-from-point
-                    currentTy = 0;
+                    console.log(`Pinch Start (at 1x): Dist=${pinchStartDistance.toFixed(2)}, Scale=${pinchStartScale.toFixed(2)}, Setting Origin=(${originX.toFixed(1)}px, ${originY.toFixed(1)}px)`);
                 } else {
-                    // If already zoomed, keep origin centered. Pinch will scale around center,
-                    // and existing currentTx/Ty (from previous pan or zoom) are preserved.
+                    // Start is already zoomed: Keep origin centered to avoid offset issues
                     modalImage.style.transformOrigin = 'center center';
+                    console.log(`Pinch Start (Zoomed >1x): Dist=${pinchStartDistance.toFixed(2)}, Scale=${pinchStartScale.toFixed(2)}, Keeping Origin=center center`);
                 }
-                modalImage.style.transition = 'none';
+                // --- End Conditionally Set Transform Origin ---
+
+                modalImage.style.transition = 'none'; // Disable transition during pinch
                 modalImage.style.cursor = 'grabbing';
 
-            } else if (e.touches.length === 1 && currentScale > 1.01 && !isPinching) { // PAN START (only if not already pinching)
-                e.preventDefault(); // Prevent page scroll if pannable
-                isPanning = true;
-                panStartX = e.touches[0].clientX;
-                panStartY = e.touches[0].clientY;
-                panStartTx = currentTx; // Store current translation at pan start
-                panStartTy = currentTy;
-                modalImage.style.transition = 'none'; // Panning should be direct
-                modalImage.style.cursor = 'grabbing';
-                clearTimeout(clickTimer); clickTimer = null; // Prevent tap-zoom if pan starts
+            } else if (e.touches.length < 2 && isPinching) {
+                 // Finger lifted during pinch - treat as end
+                 isPinching = false;
+                 // Apply final transform, but DON'T reset origin yet, let touchend handle it
+                 applyFinalZoomTransform(false);
+                 console.log("Pinch End (one finger lifted early)");
             }
         }
 
         function onTouchMove(e) {
-            if (e.target !== modalImage) return;
+            if (isPinching && e.touches.length === 2) {
+                e.preventDefault(); // Prevent scroll/zoom
 
-            if (isPinching && e.touches.length === 2) { // PINCH MOVE
-                e.preventDefault();
                 const currentDistance = getDistance(e.touches);
+
+                // --- Calculate new scale ---
                 if (pinchStartDistance === 0) return; // Avoid division by zero
 
-                let newScale = pinchStartScale * (currentDistance / pinchStartDistance);
-                currentScale = Math.max(1.0, newScale); // Clamp scale minimum
+                // Revert to Multiplicative Calculation:
+                currentScale = pinchStartScale * (currentDistance / pinchStartDistance);
 
-                // Apply transform. currentTx/Ty are either 0 (if origin set to midpoint)
-                // or preserve previous pan (if origin is center).
-                modalImage.style.transform = `translate(${currentTx}px, ${currentTy}px) scale(${currentScale})`;
+                // Additive Calculation (commented out):
+                // const scaleRatio = currentDistance / pinchStartDistance;
+                // const scaleChange = scaleRatio - 1.0;
+                // currentScale = pinchStartScale + scaleChange;
 
-            } else if (isPanning && e.touches.length === 1) { // PAN MOVE
-                e.preventDefault();
-                const dx = e.touches[0].clientX - panStartX;
-                const dy = e.touches[0].clientY - panStartY;
-                currentTx = panStartTx + dx;
-                currentTy = panStartTy + dy;
-                modalImage.style.transform = `translate(${currentTx}px, ${currentTy}px) scale(${currentScale})`;
+                // Clamp scale minimum during move (applyFinalZoomTransform clamps again)
+                currentScale = Math.max(1.0, currentScale);
+
+                // --- Translation calculation removed - handled by origin ---
+
+                // Apply transform directly instead of scheduling
+                updateTransform();
             }
         }
+
+        // --- RAF Callback --- (This function is now called directly by onTouchMove)
+        function updateTransform() {
+            // Apply the latest calculated scale directly (no transition during pinch)
+            // Translation is implicitly handled by the transform-origin set in onTouchStart
+            const scale = Math.max(1.0, currentScale); // Ensure scale doesn't go below 1
+
+            modalImage.style.transform = `scale(${scale})`; // Only apply scale
+
+            // Update cursor only if pinching
+            if (isPinching) {
+                modalImage.style.cursor = 'grabbing';
+            }
+
+            // isTransformScheduled = false; // No longer needed as we don't use RAF flag here
+        }
+
+        // Remove the scheduleTransform function as it's no longer used
+        /*
+        function scheduleTransform() {
+            if (!isTransformScheduled) {
+                isTransformScheduled = true;
+                requestAnimationFrame(updateTransform);
+            }
+        }
+        */ // {{ edit_2 }}
 
         function onTouchEnd(e) {
-            if (e.target !== modalImage) return;
-
-            if (isPinching) { // If a pinch gesture was active
-                if (e.touches.length < 2) { // And now less than 2 touches (pinch ended)
+            if (isPinching) {
+                // Fingers lifted while pinching was active
+                if (e.touches.length < 2) {
                     isPinching = false;
-                    // Finalize pinch: apply transitions, set cursor.
-                    // `false` preserves currentTx/Ty and transformOrigin set during pinch.
-                    applyFinalZoomTransform(false);
+                    // Apply final transform with transition
+                    // Crucially, DO NOT reset origin here, as the scaling
+                    // was applied relative to the pinch origin.
+                    // The origin will be reset by subsequent tap/double-tap or modal close/reopen.
+                    applyFinalZoomTransform(false); // Apply final scale, keep origin, add transition
+                    console.log(`Pinch End: Final Scale=${currentScale.toFixed(2)}`);
                 }
-            } else if (isPanning) { // If a pan gesture was active
-                if (e.touches.length === 0) { // And now no touches (pan ended)
-                    isPanning = false;
-                    // Finalize pan: apply transitions, set cursor.
-                    // `false` preserves currentTx/Ty from pan. Origin should be center or as set by prior pinch.
-                    applyFinalZoomTransform(false);
-                }
-            }
-            
-            // If all touches are up and no gesture was active (e.g., a tap that didn't become a zoom)
-            // or after gestures end, ensure cursor is correct. applyFinalZoomTransform handles this.
-             if (e.touches.length === 0 && !isPinching && !isPanning) {
-                if (currentScale > 1.01) {
-                    modalImage.style.cursor = 'grab';
-                } else {
-                    modalImage.style.cursor = 'zoom-in';
-                }
+            } else if (!isTransformScheduled) {
+                 // If not pinching and no transform pending, ensure cursor/state is correct
+                 applyFinalZoomTransform(false); // Apply potentially clamped scale, keep origin
             }
         }
-        
+
         // --- Cleanup and Listener Setup ---
-        // Remove any pre-existing listeners of the same type to avoid duplicates if this function is called multiple times
+        // (Remove/Add listeners remains the same)
         modalImage.removeEventListener('click', handleModalImageClick);
         modalImage.removeEventListener('dblclick', handleModalImageDblClick);
         modalImage.removeEventListener('touchstart', onTouchStart);
@@ -3920,13 +4151,13 @@
         // Add new listeners
         modalImage.addEventListener('click', handleModalImageClick);
         modalImage.addEventListener('dblclick', handleModalImageDblClick);
-        modalImage.addEventListener('touchstart', onTouchStart, { passive: false }); // passive: false to allow preventDefault
-        modalImage.addEventListener('touchmove', onTouchMove, { passive: false }); // passive: false to allow preventDefault
+        modalImage.addEventListener('touchstart', onTouchStart, { passive: false });
+        modalImage.addEventListener('touchmove', onTouchMove, { passive: false });
         modalImage.addEventListener('touchend', onTouchEnd);
-        modalImage.addEventListener('touchcancel', onTouchEnd); // Handle touchcancel like touchend
+        modalImage.addEventListener('touchcancel', onTouchEnd);
 
-        // Reset state when the modal is opened initially (or this function is called)
-        resetZoomState(); 
+        // Reset state when the modal is opened initially
+        resetZoomState(); // Resets origin to center center initially
     }
 
     // --- Custom Context Menu Logic --- Start
@@ -4297,65 +4528,71 @@
     }
     // --- Fullscreen API Logic --- End
 
-    // Pan/Zoom state variables for pinch-zoom and pan // REMOVE THIS BLOCK START
-    // let panX = 0, panY = 0; 
-    // let currentScale = 1.0; 
-    // let pinchStartMidpoint = {x: 0, y: 0};
-    // let pinchStartPan = {x: 0, y: 0}; 
-    // let pinchStartScale = 1.0; 
-    // let pinchStartDistance = 0; 
-    // let isPinching = false; 
+    // Pan/Zoom state variables for pinch-zoom and pan
+    let panX = 0, panY = 0;
+    let currentScale = 1.0;
+    let pinchStartMidpoint = {x: 0, y: 0};
+    let pinchStartPan = {x: 0, y: 0};
+    let pinchStartScale = 1.0;
+    let pinchStartDistance = 0;
+    let isPinching = false;
 
-    // function getMidpoint(touches) { 
-    //     const t1 = touches[0], t2 = touches[1];
-    //     return {
-    //         x: (t1.clientX + t2.clientX) / 2,
-    //         y: (t1.clientY + t2.clientY) / 2
-    //     };
-    // }
-    // function getDistance(touches) { 
-    //     const t1 = touches[0], t2 = touches[1];
-    //     return Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
-    // }
+    function getMidpoint(touches) {
+        const t1 = touches[0], t2 = touches[1];
+        return {
+            x: (t1.clientX + t2.clientX) / 2,
+            y: (t1.clientY + t2.clientY) / 2
+        };
+    }
+    function getDistance(touches) {
+        const t1 = touches[0], t2 = touches[1];
+        return Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+    }
 
-    // modalImage.addEventListener('touchstart', function(e) { 
-    //     if (e.touches.length === 2) {
-    //         isPinching = true;
-    //         pinchStartScale = currentScale;
-    //         pinchStartPan = {x: panX, y: panY};
-    //         pinchStartMidpoint = getMidpoint(e.touches);
-    //         pinchStartDistance = getDistance(e.touches);
-    //     }
-    // }, { passive: false });
+    modalImage.addEventListener('touchstart', function(e) {
+        if (e.touches.length === 2) {
+            isPinching = true;
+            pinchStartScale = currentScale;
+            pinchStartPan = {x: panX, y: panY};
+            pinchStartMidpoint = getMidpoint(e.touches);
+            pinchStartDistance = getDistance(e.touches); // <-- Set pinchStartDistance
+            // Optionally set transformOrigin here as before
+        }
+    }, { passive: false });
 
-    // modalImage.addEventListener('touchmove', function(e) {
-    //     if (isPinching && e.touches.length === 2) {
-    //         e.preventDefault();
-    //         const newDistance = getDistance(e.touches);
-    //         currentScale = pinchStartScale * (newDistance / pinchStartDistance);
+    modalImage.addEventListener('touchmove', function(e) {
+        if (isPinching && e.touches.length === 2) {
+            e.preventDefault();
+            // Calculate scale as before
+            const newDistance = getDistance(e.touches);
+            currentScale = pinchStartScale * (newDistance / pinchStartDistance);
 
-    //         const newMidpoint = getMidpoint(e.touches);
-    //         panX = pinchStartPan.x + (newMidpoint.x - pinchStartMidpoint.x);
-    //         panY = pinchStartPan.y + (newMidpoint.y - pinchStartMidpoint.y);
+            // Calculate pan
+            const newMidpoint = getMidpoint(e.touches);
+            panX = pinchStartPan.x + (newMidpoint.x - pinchStartMidpoint.x);
+            panY = pinchStartPan.y + (newMidpoint.y - pinchStartMidpoint.y);
 
-    //         modalImage.style.transform = `translate(${panX}px, ${panY}px) scale(${currentScale})`;
+            // Apply transform
+            modalImage.style.transform = `translate(${panX}px, ${panY}px) scale(${currentScale})`;
 
-    //         if (currentScale > 1.01) {
-    //             modalImage.classList.add('is-zoomed');
-    //         } else {
-    //             modalImage.classList.remove('is-zoomed');
-    //             panX = 0;
-    //             panY = 0;
-    //             modalImage.style.transform = `scale(${currentScale})`;
-    //         }
-    //     }
-    // }, { passive: false });
+            // Toggle zoomed class for CSS
+            if (currentScale > 1.01) {
+                modalImage.classList.add('is-zoomed');
+            } else {
+                modalImage.classList.remove('is-zoomed');
+                panX = 0;
+                panY = 0;
+                modalImage.style.transform = `scale(${currentScale})`;
+            }
+        }
+    }, { passive: false });
 
-    // modalImage.addEventListener('touchend', function(e) {
-    //     if (e.touches.length < 2) {
-    //         isPinching = false;
-    //     }
-    // }); // REMOVE THIS BLOCK END
+    modalImage.addEventListener('touchend', function(e) {
+        if (e.touches.length < 2) {
+            isPinching = false;
+            // Optionally clamp pan/scale or reset
+        }
+    });
 
     </script>
 </body>
