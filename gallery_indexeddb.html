@@ -1141,6 +1141,9 @@
             <div class="menu-buttons" style="margin-top: 10px;">
                 <button id="toggleThumbnailInfoBtn"><i class="fas fa-info-circle"></i>Show Info</button>
             </div>
+            <div class="menu-buttons" style="margin-top: 10px;">
+                <button id="toggleFullscreenBtn"><i class="fas fa-expand"></i>Enter Fullscreen</button>
+            </div>
         </div>
     </div>
 
@@ -1614,6 +1617,7 @@
             initMasonryLayout(); // Initialize masonry layout state
             initThumbnailInfo(); // Initialize thumbnail info visibility state
             initThumbnailSizeControl(); // Initialize size slider (applies based on layout)
+            setupFullscreenListeners(); // Add fullscreen listeners
             
             // Show mobile usage tip for first-time visitors on mobile devices
             const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -4221,6 +4225,47 @@
         thumbnailSizeSlider.addEventListener('change', saveThumbnailSizePreference);
     }
     // --- Thumbnail Size Control --- End
+
+    // --- Fullscreen API Logic --- Start
+    function toggleFullscreen() {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(err => {
+                console.error(`Error attempting to enable fullscreen mode: ${err.message} (${err.name})`);
+                showStatus(`Fullscreen failed: ${err.message}`, 'error');
+            });
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            }
+        }
+    }
+
+    function updateFullscreenButton() {
+        const btn = document.getElementById('toggleFullscreenBtn');
+        if (!btn) return; // Should not happen
+
+        if (document.fullscreenElement) {
+            btn.innerHTML = '<i class="fas fa-compress"></i>Exit Fullscreen';
+        } else {
+            btn.innerHTML = '<i class="fas fa-expand"></i>Enter Fullscreen';
+        }
+    }
+
+    function setupFullscreenListeners() {
+        const btn = document.getElementById('toggleFullscreenBtn');
+        if (btn) {
+            btn.addEventListener('click', toggleFullscreen);
+        }
+        document.addEventListener('fullscreenchange', updateFullscreenButton);
+        // Add vendor specific listeners for compatibility
+        document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
+        document.addEventListener('mozfullscreenchange', updateFullscreenButton);
+        document.addEventListener('MSFullscreenChange', updateFullscreenButton);
+
+        // Initial button state
+        updateFullscreenButton();
+    }
+    // --- Fullscreen API Logic --- End
 
     </script>
 </body>
