@@ -1,0 +1,141 @@
+# Product Requirements Document: PNG Gallery
+
+## Overview
+The PNG Gallery is a client-side web application designed for viewing, organizing, and managing image collections, with a specialized focus on leveraging and editing PNG metadata. It solves the problem of accessing and manipulating detailed information embedded within PNG files, which standard image viewers often ignore. It is targeted towards users who need to manage image libraries where PNG metadata (like title, author, description, keywords) is important, such as artists, designers, archivists, or data organizers. Its value lies in providing a dedicated, browser-based tool that combines gallery features with advanced PNG-specific capabilities, eliminating the need for separate desktop software for metadata editing.
+
+## Core Features
+
+-   **Image Gallery Display:**
+    -   **What:** Renders images from a user-selected local folder in a responsive thumbnail grid.
+    -   **Why:** Provides the primary interface for browsing the image collection.
+    -   **How:** Uses the File System Access API to read files, generates thumbnails (potentially using Canvas), and displays them using HTML/CSS (Flexbox/Grid). Supports customizable thumbnail sizes. Includes a full-screen viewing mode.
+-   **PNG Metadata Handling:**
+    -   **What:** Extracts, displays, and allows editing of standard PNG metadata chunks (e.g., `tEXt`, `zTXt`, `iTXt` for fields like Title, Author, Description, Keywords, Copyright, etc.). Offers dedicated interfaces for single and batch editing.
+    -   **Why:** This is the core unique value proposition, allowing users to manage embedded PNG information directly.
+    -   **How:** Uses JavaScript libraries (`png-metadata.js`, `js/tEXt-parser.js`, etc.) to parse and reconstruct PNG file chunks without re-encoding the image data where possible. Edits are saved back to the original files via the File System Access API handle.
+-   **Image Import & Format Handling:**
+    -   **What:** Allows users to select a local directory or drag-and-drop images to populate the gallery. Includes functionality to convert other image formats to PNG upon import.
+    -   **Why:** Provides easy ways to add images and standardizes the collection format for consistent metadata handling.
+    -   **How:** Leverages File System Access API for folder selection/reading. Uses Canvas API for image conversion to PNG format, potentially preserving existing metadata where feasible.
+-   **Organization & Search:**
+    -   **What:** Provides tools to organize and find images, including sorting (by name, date, size, color), keyword tagging/filtering, and real-time search based on filename and potentially metadata. Features a unique color-based sorting option.
+    -   **Why:** Enables users to efficiently manage and navigate large collections.
+    -   **How:** Implements sorting logic in JavaScript. Extracts keywords from PNG metadata and allows user-defined tags. Search likely filters the displayed thumbnails based on input matching filenames or metadata content. Color sorting involves extracting dominant colors (likely via Canvas) and sorting based on hue.
+-   **Persistence:**
+    -   **What:** Stores user settings (like thumbnail size) and potentially gallery organization/metadata locally. Explores using Local Storage and IndexedDB.
+    -   **Why:** Provides a consistent experience across sessions without needing a server backend. IndexedDB addresses storage limitations of Local Storage.
+    -   **How:** Uses browser Local Storage API for simple settings. The `gallery_indexeddb.html` suggests an implementation using IndexedDB for potentially storing file handles, cached thumbnails, or extracted metadata for performance and larger storage capacity.
+
+## User Experience
+
+-   **User Personas:** Digital artists, photographers, web designers, archivists, researchers, anyone needing to manage image metadata, particularly for PNGs.
+-   **Key User Flows:**
+    1.  **Import:** User opens `gallery.html` -> Clicks "Select Folder" or drags folder/files -> Grants permission -> Gallery populates with thumbnails.
+    2.  **Browsing:** User scrolls through thumbnails -> Adjusts thumbnail size -> Clicks a thumbnail for full-screen view.
+    3.  **Metadata Editing (Single):** User hovers over thumbnail -> Clicks "Select" -> Clicks "Edit Metadata" (or similar button) -> Navigates to `png-editor.html` (or modal appears) -> Views/Edits metadata fields -> Saves changes.
+    4.  **Metadata Editing (Batch):** User selects multiple thumbnails -> Clicks "Batch Edit Metadata" -> Navigates to `png-batch-editor.html` (or modal) -> Applies changes to selected images -> Saves changes.
+    5.  **Organization:** User uses sort buttons (Name, Date, Size, Color) -> Gallery reorders. User types in search bar -> Gallery filters in real-time. User manages/clicks tags -> Gallery filters.
+-   **UI/UX Considerations:**
+    -   Modern, dark-themed interface for visual appeal and reduced eye strain.
+    -   Responsive design adapting to different screen sizes.
+    -   Clear visual feedback for selection, loading states, and operations.
+    -   Intuitive navigation (e.g., hamburger menu).
+    -   Smooth transitions and animations for a polished feel.
+    -   Efficient handling of potentially large numbers of thumbnails (e.g., lazy loading).
+    -   Clear indication of unsaved changes in editors.
+
+## Technical Architecture
+
+-   **System Components:**
+    -   `gallery.html`: Main gallery interface.
+    -   `gallery_indexeddb.html`: Alternative gallery potentially using IndexedDB.
+    -   `png-editor.html`: Interface for editing single PNG metadata.
+    -   `png-batch-editor.html`: Interface for editing multiple PNGs' metadata.
+    -   `png-metadata.js`: Core JavaScript logic for PNG metadata parsing/writing.
+    -   `js/tEXt-parser.js`, `js/png-chunk-*.js`: Helper libraries for PNG chunk manipulation.
+    -   Inline CSS / Potentially external CSS files: Styling rules.
+    -   Inline JavaScript / Potentially external JS files: Frontend logic, event handling, API interactions.
+-   **Data Models:**
+    -   In-memory representation of images (file handle, name, path, dimensions, thumbnail data URL, extracted metadata object, potentially dominant color).
+    -   Metadata object structure (key-value pairs corresponding to PNG text chunks).
+    -   (If using IndexedDB) Schema for storing file handles, metadata, cache, tags.
+-   **APIs and Integrations:**
+    -   **Browser APIs:** File System Access API (required for reading/writing local files/folders), Canvas API (for thumbnail generation, color extraction, image conversion), Local Storage / IndexedDB API (for persistence).
+    -   **Third-Party Libraries:** Font Awesome (icons), potentially the minified PNG JS libraries found in `js/`.
+-   **Infrastructure Requirements:** None (fully client-side). Requires a modern web browser supporting the necessary APIs.
+
+## Development Roadmap
+
+-   **MVP Requirements:**
+    1.  Basic HTML structure and CSS for gallery layout (dark theme).
+    2.  Implement folder selection using File System Access API.
+    3.  Load images from the selected folder.
+    4.  Generate and display basic thumbnails (contain, no cropping initially).
+    5.  Implement basic full-screen image viewing on click.
+    6.  Extract and display *existing* PNG metadata (read-only) associated with each thumbnail (e.g., in a tooltip or simple info panel).
+    7.  Basic filename sorting.
+-   **Phase 2: Core Metadata & Organization:**
+    1.  Implement PNG metadata *editing* for single files (`png-editor.html` or modal). Save changes back to the file.
+    2.  Implement robust metadata parsing/writing using `png-metadata.js`.
+    3.  Implement basic search functionality (filename).
+    4.  Implement additional sorting options (date, size).
+    5.  Implement keyword extraction from metadata and display as tags.
+    6.  Implement tag-based filtering.
+    7.  Implement thumbnail size control.
+    8.  Implement basic persistence for settings (thumbnail size) using Local Storage.
+-   **Phase 3: Advanced Features & Performance:**
+    1.  Implement batch metadata editing (`png-batch-editor.html` or modal).
+    2.  Implement image conversion to PNG on import.
+    3.  Implement color extraction and color-based sorting.
+    4.  Integrate IndexedDB (`gallery_indexeddb.html`) for persistent storage of file handles, metadata cache, and potentially tags to improve performance and handle larger collections/storage needs.
+    5.  Implement advanced search (filtering by metadata fields).
+    6.  UI Polish: Animations, transitions, error handling improvements.
+    7.  Lazy loading for thumbnails.
+    8.  Explore support for other metadata standards (EXIF/XMP) during conversion.
+-   **Future Enhancements:**
+    -   Support for other image formats beyond PNG conversion (direct viewing).
+    -   More advanced image editing features (cropping, rotation).
+    -   Customizable themes.
+    -   Sharing/exporting options (e.g., export metadata report).
+    -   Accessibility improvements (ARIA, keyboard navigation).
+    -   Automated testing suite.
+
+## Logical Dependency Chain
+
+1.  **Foundation:** Setup basic HTML (`gallery.html`) and CSS structure (dark theme, basic grid/flex layout).
+2.  **File Access:** Implement File System Access API to select a directory handle.
+3.  **Image Loading:** Iterate through directory handle, read image files.
+4.  **Basic Display:** Generate simple data URLs or object URLs for images and display them as basic `<img>` tags in the gallery layout.
+5.  **Thumbnail Generation:** Use Canvas to create properly sized/contained thumbnails.
+6.  **Metadata Reading:** Integrate `png-metadata.js` (or similar) to parse `tEXt`/`iTXt`/`zTXt` chunks from PNG files upon loading.
+7.  **Metadata Display:** Show extracted metadata alongside thumbnails or in a detail view/modal.
+8.  **Basic Sorting:** Implement filename sort for displayed items.
+9.  **Settings Persistence:** Use Local Storage for simple settings like thumbnail size preference.
+10. **Single Metadata Editing:** Build the editor UI (`png-editor.html`/modal) and implement logic to modify the metadata object and use `png-metadata.js` (or similar) to write changes back to the file via the stored file handle.
+11. **Further Organization:** Build search, advanced sorting (date, size, color - requires color extraction via Canvas), and tagging features.
+12. **Batch Editing:** Adapt the single editor logic for applying changes to multiple selected files.
+13. **Format Conversion:** Implement Canvas-based conversion for non-PNG files upon import.
+14. **Performance/Scaling:** Introduce IndexedDB for caching, persistence beyond Local Storage limits, and potentially storing file handles across sessions. Implement lazy loading for thumbnails.
+
+## Risks and Mitigations
+
+-   **Browser API Compatibility:** File System Access API is not universally supported or may have different implementation details/permissions models.
+    -   **Mitigation:** Clearly document browser requirements (README). Use feature detection. Provide graceful degradation or informative messages for unsupported browsers.
+-   **Performance with Large Galleries:** Rendering thousands of thumbnails, extracting metadata, and performing operations like color sorting can be slow.
+    -   **Mitigation:** Implement thumbnail lazy loading. Optimize image loading and parsing. Use Web Workers for intensive tasks (parsing, color extraction). Leverage IndexedDB for caching metadata/thumbnails. Optimize DOM manipulations.
+-   **File System Access Permissions:** Users might be hesitant to grant folder access, or the browser might revoke permissions.
+    -   **Mitigation:** Clearly explain *why* access is needed. Handle permission denials gracefully. Re-prompt for permission if handles become invalid. Consider fallback to single file input if folder access is denied.
+-   **PNG Specification Complexity:** Correctly parsing and writing all variations of PNG chunks and handling edge cases can be complex. Corrupting files during edits is a major risk.
+    -   **Mitigation:** Rely on well-tested libraries (`png-metadata.js`, `tEXt-parser.js`). Implement thorough testing, especially for the writing process. Include error handling for parsing failures. Consider backups or warnings before overwriting files.
+-   **Storage Limitations:** Local Storage is small. Base64 encoding thumbnails can consume space quickly.
+    -   **Mitigation:** Prioritize IndexedDB for storing anything beyond simple settings. Avoid storing large amounts of Base64 data if possible (use Object URLs or IndexedDB blobs). Implement checks and balances for storage usage.
+-   **Scope Creep:** Adding too many features too quickly.
+    -   **Mitigation:** Stick to the phased roadmap. Clearly define MVP and subsequent phases. Prioritize core PNG features.
+
+## Appendix
+
+-   [PNG Specification (W3C)](https://www.w3.org/TR/PNG/)
+-   [File System Access API (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/File_System_Access_API)
+-   [Canvas API (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API)
+-   [IndexedDB API (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API)
+-   [Local Storage API (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage) 

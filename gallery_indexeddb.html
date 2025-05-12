@@ -2201,17 +2201,18 @@
         
         modalInfo.innerHTML = infoText;
         
-        // Reset zoom when opening new image
-        modalImage.classList.remove('zoomed-fit');
-        modalImage.classList.remove('zoomed-full');
-        
+        // Reset transform before showing (handled by setupImageZoom)
+        // modalImage.classList.remove('zoomed-fit'); // No longer using classes
+        // modalImage.classList.remove('zoomed-full');
+        // modalImage.style.transform = ''; // Reset inline style
+
         imageModal.style.display = 'block';
         setTimeout(() => imageModal.classList.add('show'), 10);
-        
+
         updateNavigationButtons();
-        
-        // Initialize zoom functionality
-        setupImageZoom();
+
+        // Initialize/reset zoom functionality each time an image is shown
+        setupImageZoom(); // This now includes resetting state
     }
 
     // Update navigation buttons state
@@ -2461,6 +2462,7 @@
         let touchStartTarget;
         let touchTimer;
         let touchStartX, touchStartY; // Track initial touch position for context menu
+        let touchMoved = false; // Flag to track significant movement
 
         galleryGrid.addEventListener('touchstart', (event) => {
             // Find closest thumbnail parent (if any)
@@ -2470,98 +2472,127 @@
             // Store reference to avoid issues with touch moving to a different element
             touchStartTarget = thumbnail;
             touchStartTimestamp = Date.now();
-            
+            touchMoved = false; // Reset flag on new touch start
+
             // Store touch position for potential context menu
             if (event.touches && event.touches.length) {
                 touchStartX = event.touches[0].clientX;
                 touchStartY = event.touches[0].clientY;
             }
-            
+
             // If multiple fingers are used (e.g., pinch zoom), don't start long press
             if (event.touches.length > 1) {
                 clearTimeout(touchTimer);
                 return;
             }
-            
+
             const index = parseInt(thumbnail.dataset.index);
             if (isNaN(index)) return; // Invalid index
-            
+
             // Start long press timer
             touchTimer = setTimeout(() => {
                 console.log('[Long Press Timer] Fired.');
                 
-                // Create a synthetic event for the context menu
-                const contextEvent = new Event('contextmenu', { bubbles: true, cancelable: true });
-                
-                // Add position properties from the original touch
-                contextEvent.clientX = touchStartX;
-                contextEvent.clientY = touchStartY;
-                contextEvent.touches = [{ clientX: touchStartX, clientY: touchStartY }];
-                
-                // Dispatch the context menu event
-                thumbnail.dispatchEvent(contextEvent);
-                
-                // Only attempt vibration if user has already interacted with the page
-                // This prevents browser security warnings
-                if (hasUserInteracted && navigator.vibrate) {
-                    try {
-                        navigator.vibrate(50);
-                    } catch (e) {
-                        // Ignore errors - vibration is just an enhancement
-                        console.log('Vibration failed:', e);
+                // Only trigger long press if touch hasn't moved significantly
+                if (!touchMoved) {
+                    // Create a synthetic event for the context menu
+                    const contextEvent = new Event('contextmenu', { bubbles: true, cancelable: true });
+                    
+                    // Add position properties from the original touch
+                    contextEvent.clientX = touchStartX;
+                    contextEvent.clientY = touchStartY;
+                    contextEvent.touches = [{ clientX: touchStartX, clientY: touchStartY }];
+                    
+                    // Dispatch the context menu event
+                    thumbnail.dispatchEvent(contextEvent);
+                    
+                    // Only attempt vibration if user has already interacted with the page
+                    if (hasUserInteracted && navigator.vibrate) {
+                        try {
+                            navigator.vibrate(50);
+                        } catch (e) {
+                            console.log('Vibration failed:', e);
+                        }
                     }
+                } else {
+                    console.log('[Long Press Timer] Aborted due to touch movement.');
                 }
             }, 500); // 500ms for long press
-            
+
             // Prevent default context menu
-            event.preventDefault();
+            // event.preventDefault(); // Removed this line to allow default scroll
         });
 
         galleryGrid.addEventListener('touchend', (event) => {
             const thumbnail = touchStartTarget; // Use the stored reference
-            
+
             if (!thumbnail) return; // Not a valid touch sequence
-            
+
             // Clear timer and get duration
             clearTimeout(touchTimer);
             const touchDuration = Date.now() - touchStartTimestamp;
-            
-            // Only trigger click action for short touches
-            // Longer touches are handled by the long press timeout
-            if (touchDuration < 500) { // Short touch - treat as click
+
+            // Only trigger click action for short touches THAT DID NOT MOVE
+            if (touchDuration < 500 && !touchMoved) { // Short touch AND did not move - treat as click
+                console.log('[Touch End] Short touch, no movement detected. Treating as click.');
                 const index = parseInt(thumbnail.dataset.index);
-                if (isNaN(index)) return; // Invalid index
-                
-                if (isSelectModeActive) {
-                    toggleSelection(index);
+                if (!isNaN(index)) { // Check index validity
+                    // --- STOP PROPAGATION & PREVENT DEFAULT ---
+                    event.stopPropagation(); 
+                    event.preventDefault(); // Add this line
+                    // --- END STOP PROPAGATION & PREVENT DEFAULT ---
+                    if (isSelectModeActive) {
+                        toggleSelection(index);
+                    } else {
+                        showFullImage(index);
+                    }
                 } else {
-                    showFullImage(index);
+                     console.warn('[Touch End] Invalid index found on touchend:', thumbnail.dataset.index);
                 }
+            } else if (touchMoved) {
+                console.log('[Touch End] Touch moved. Scroll action presumed.');
+                // Do nothing, allow default scroll
+            } else {
+                 console.log('[Touch End] Long touch detected (or other condition). No click action.');
+                 // Long press action is handled by the timer's callback
             }
-            
+
             // Reset touch tracking
             touchStartTarget = null;
             touchStartTimestamp = 0;
             touchStartX = undefined;
             touchStartY = undefined;
-            
-            // Prevent default to avoid unintended actions
-            event.preventDefault();
+            touchMoved = false; // Reset moved flag
+
+            // Don't prevent default here unless necessary for specific actions
+            // event.preventDefault(); // Removed this line
         });
 
         galleryGrid.addEventListener('touchmove', (event) => {
+            // If we haven't recorded a start target, ignore move
+            if (!touchStartTarget) return;
+
             // Calculate how far the touch has moved
             if (event.touches && event.touches.length && touchStartX !== undefined && touchStartY !== undefined) {
-                const moveX = Math.abs(event.touches[0].clientX - touchStartX);
-                const moveY = Math.abs(event.touches[0].clientY - touchStartY);
-                
-                // If moved more than 10px in any direction, cancel long press
+                const currentX = event.touches[0].clientX;
+                const currentY = event.touches[0].clientY;
+                const moveX = Math.abs(currentX - touchStartX);
+                const moveY = Math.abs(currentY - touchStartY);
+
+                // If moved more than 10px in any direction, consider it moved and cancel long press
                 if (moveX > 10 || moveY > 10) {
+                    if (!touchMoved) { // Log only the first time it's detected as moved
+                        console.log('[Touch Move] Significant movement detected. Cancelling long press timer.');
+                    }
+                    touchMoved = true; // Set the flag
                     clearTimeout(touchTimer);
                 }
             } else {
-                clearTimeout(touchTimer); // Cancel if we can't determine movement
+                // If we can't determine movement, cancel timer just in case
+                clearTimeout(touchTimer);
             }
+            // Do NOT prevent default scrolling behavior here
+            // event.preventDefault();
         });
 
         // File selection handling
@@ -2705,9 +2736,25 @@
 
         // Click outside modal to close
         imageModal.addEventListener('click', (e) => {
-            if (e.target === imageModal) {
-                closeModal();
-            }
+            // Add a small delay to prevent immediate closure from the opening click/touch
+            setTimeout(() => {
+                // Check if the modal is still supposed to be shown
+                // (prevents closing if the user already initiated closing via another method)
+                if (!imageModal.classList.contains('show')) {
+                    return; 
+                }
+
+                // --- DEBUG LOGGING START ---
+                console.log('[Modal Backdrop Click Check (Delayed)] Event target:', e.target);
+                console.log('[Modal Backdrop Click Check (Delayed)] Is e.target === imageModal?', e.target === imageModal);
+                // --- DEBUG LOGGING END ---
+
+                // Now perform the original check
+                if (e.target === imageModal) {
+                    console.log('[Modal Backdrop Click Check (Delayed)] Closing modal due to backdrop click.'); // DEBUG
+                    closeModal();
+                }
+            }, 50); // Delay check by 50ms
         });
 
         // Sorting buttons
@@ -3615,69 +3662,237 @@
     // Add image zoom functionality
     function setupImageZoom() {
         let clickTimer = null;
-        let zoomState = 'normal'; // Possible states: 'normal', 'fit', 'full'
-        
-        // Remove existing listeners first to prevent duplicates
+        let currentScale = 1.0;
+        let currentTx = 0; // Keep track for panning (optional future feature) or resetting
+        let currentTy = 0;
+        let pinchStartDistance = 0;
+        let pinchStartScale = 1.0;
+        // No longer need pinchStartMidpoint, pinchStartTx, pinchStartTy with origin approach
+
+        let isPinching = false;
+        let isTransformScheduled = false; // RAF flag
+
+        // --- RAF Callback ---
+        function updateTransform() {
+            // Apply the latest calculated scale directly (no transition during pinch)
+            // Translation is implicitly handled by the transform-origin set in onTouchStart
+            const scale = Math.max(1.0, currentScale); // Ensure scale doesn't go below 1
+
+            modalImage.style.transform = `scale(${scale})`; // Only apply scale
+
+            // Update cursor only if pinching
+            if (isPinching) {
+                modalImage.style.cursor = 'grabbing';
+            }
+
+            isTransformScheduled = false; // Allow next frame request
+        }
+
+        function scheduleTransform() {
+            if (!isTransformScheduled) {
+                isTransformScheduled = true;
+                requestAnimationFrame(updateTransform);
+            }
+        }
+
+        // --- Apply final transform with transition (resetting origin) ---
+        function applyFinalZoomTransform(resetOrigin = true) {
+            // Ensure final scale is constrained
+            currentScale = Math.max(1.0, currentScale);
+
+            // Reset translation if scale is 1
+            if (Math.abs(currentScale - 1.0) < 0.01) {
+                currentTx = 0;
+                currentTy = 0;
+            } else {
+                // If keeping existing translation (e.g., after panning in future)
+                // We might need to adjust it if the origin changes here
+                // For now, simple zooms reset translation
+                 if (resetOrigin) {
+                     currentTx = 0;
+                     currentTy = 0;
+                 }
+            }
+
+            // Apply with transition and reset origin for tap zooms
+            modalImage.style.transition = 'transform 0.2s ease-out';
+            if (resetOrigin) {
+                modalImage.style.transformOrigin = 'center center'; // Use center for tap zooms
+            }
+            // Apply final transform (potentially just scale if origin handled pinch)
+            // Or include translation if needed (e.g., after panning or tap zooms)
+             modalImage.style.transform = `translate(${currentTx}px, ${currentTy}px) scale(${currentScale})`;
+
+            // Update cursor based on final zoom level
+            if (currentScale > 1.0) {
+                modalImage.style.cursor = 'zoom-out';
+            } else {
+                modalImage.style.cursor = 'zoom-in';
+            }
+        }
+
+
+        // --- Reset zoom state ---
+        function resetZoomState() {
+            currentScale = 1.0;
+            currentTx = 0;
+            currentTy = 0;
+            isPinching = false;
+            pinchStartDistance = 0;
+            isTransformScheduled = false; // Reset RAF flag
+
+            // Apply transform directly without transition on reset
+            modalImage.style.transition = 'none';
+            modalImage.style.transformOrigin = 'center center'; // Ensure origin is center on reset
+            applyFinalZoomTransform(true); // Applies transform, sets correct cursor, resets origin
+        }
+
+        // --- Tap/Double-Tap Handlers ---
+        function handleModalImageClick(e) {
+            e.stopPropagation();
+            // Ignore clicks during pinch or if transform is still being scheduled by pinch
+            if (isPinching || isTransformScheduled) return;
+
+            if (clickTimer === null) {
+                clickTimer = setTimeout(() => {
+                    if (currentScale <= 1.01) { // Allow for slight float inaccuracies
+                        currentScale = 1.5;
+                    } else {
+                        currentScale = 1.0;
+                    }
+                    // Tap zooms reset translation and use center origin
+                    applyFinalZoomTransform(true);
+                    clickTimer = null;
+                }, 250);
+            }
+        }
+
+        function handleModalImageDblClick(e) {
+            e.stopPropagation();
+             // Ignore double clicks during pinch or if transform is still being scheduled by pinch
+            if (isPinching || isTransformScheduled) return;
+
+            clearTimeout(clickTimer);
+            clickTimer = null;
+
+            if (currentScale < 1.99) { // Allow for float inaccuracies
+                currentScale = 2.0;
+            } else {
+                currentScale = 1.0;
+            }
+             // Double tap zooms reset translation and use center origin
+            applyFinalZoomTransform(true);
+        }
+
+        // --- Pinch Gesture Handlers ---
+        function getDistance(touches) {
+            const touch1 = touches[0];
+            const touch2 = touches[1];
+            return Math.hypot(touch1.clientX - touch2.clientX, touch1.clientY - touch2.clientY);
+        }
+
+        function getMidpoint(touches) {
+            const touch1 = touches[0];
+            const touch2 = touches[1];
+            return {
+                x: (touch1.clientX + touch2.clientX) / 2,
+                y: (touch1.clientY + touch2.clientY) / 2
+            };
+        }
+
+        function onTouchStart(e) {
+             // Only handle pinch (2 fingers) on the image itself
+            if (e.target === modalImage && e.touches.length === 2) {
+                e.preventDefault(); // Prevent page scroll/zoom during pinch
+                isPinching = true;
+                pinchStartDistance = getDistance(e.touches);
+                pinchStartScale = currentScale;
+
+                // --- Set Transform Origin to Pinch Midpoint ---
+                const midpoint = getMidpoint(e.touches);
+                const rect = modalImage.getBoundingClientRect();
+                // Calculate origin relative to the element's top-left corner
+                const originX = midpoint.x - rect.left;
+                const originY = midpoint.y - rect.top;
+                modalImage.style.transformOrigin = `${originX}px ${originY}px`;
+                // --- End Set Transform Origin ---
+
+                 // We also need to *preserve* the current visual state by adjusting
+                 // the translation slightly when changing the origin.
+                 // This is complex. Let's *first* try without adjusting translation
+                 // and rely solely on the origin. If that's jumpy, we add this back.
+                 // currentTx = currentTx; // Keep current translation for now
+                 // currentTy = currentTy;
+
+                modalImage.style.transition = 'none'; // Disable transition during pinch
+                modalImage.style.cursor = 'grabbing';
+                console.log(`Pinch Start: Dist=${pinchStartDistance.toFixed(2)}, Scale=${pinchStartScale.toFixed(2)}, Origin=(${originX.toFixed(1)}px, ${originY.toFixed(1)}px)`);
+
+            } else if (e.touches.length < 2 && isPinching) {
+                 // Finger lifted during pinch - treat as end
+                 isPinching = false;
+                 // Apply final transform, but DON'T reset origin yet, let touchend handle it
+                 applyFinalZoomTransform(false);
+                 console.log("Pinch End (one finger lifted early)");
+            }
+        }
+
+        function onTouchMove(e) {
+            if (isPinching && e.touches.length === 2) {
+                e.preventDefault(); // Prevent scroll/zoom
+
+                const currentDistance = getDistance(e.touches);
+
+                // --- Calculate new scale ---
+                if (pinchStartDistance === 0) return; // Avoid division by zero
+                currentScale = pinchStartScale * (currentDistance / pinchStartDistance);
+                // Clamp scale minimum during move (applyFinalZoomTransform clamps again)
+                currentScale = Math.max(1.0, currentScale);
+
+                // --- Translation calculation removed - handled by origin ---
+
+                // Schedule the transform update (only scale) using RAF
+                scheduleTransform();
+            }
+        }
+
+        function onTouchEnd(e) {
+            if (isPinching) {
+                // Fingers lifted while pinching was active
+                if (e.touches.length < 2) {
+                    isPinching = false;
+                    // Apply final transform with transition
+                    // Crucially, DO NOT reset origin here, as the scaling
+                    // was applied relative to the pinch origin.
+                    // The origin will be reset by subsequent tap/double-tap or modal close/reopen.
+                    applyFinalZoomTransform(false); // Apply final scale, keep origin, add transition
+                    console.log(`Pinch End: Final Scale=${currentScale.toFixed(2)}`);
+                }
+            } else if (!isTransformScheduled) {
+                 // If not pinching and no transform pending, ensure cursor/state is correct
+                 applyFinalZoomTransform(false); // Apply potentially clamped scale, keep origin
+            }
+        }
+
+        // --- Cleanup and Listener Setup ---
+        // (Remove/Add listeners remains the same)
         modalImage.removeEventListener('click', handleModalImageClick);
         modalImage.removeEventListener('dblclick', handleModalImageDblClick);
-        
+        modalImage.removeEventListener('touchstart', onTouchStart);
+        modalImage.removeEventListener('touchmove', onTouchMove);
+        modalImage.removeEventListener('touchend', onTouchEnd);
+        modalImage.removeEventListener('touchcancel', onTouchEnd); // Also handle cancel
+
         // Add new listeners
         modalImage.addEventListener('click', handleModalImageClick);
         modalImage.addEventListener('dblclick', handleModalImageDblClick);
-        
-        function handleModalImageClick(e) {
-            // Prevent triggering modal close
-            e.stopPropagation();
-            
-            if (clickTimer === null) {
-                // Start the timer for single-click
-                clickTimer = setTimeout(() => {
-                    // Single-click action: toggle between normal and fit zoom
-                    if (zoomState === 'normal') {
-                        // Zoom to fit
-                        zoomToFit();
-                    } else if (zoomState === 'fit') {
-                        // Return to normal
-                        resetZoom();
-                    } else if (zoomState === 'full') {
-                        // Return to fit
-                        zoomToFit();
-                    }
-                    clickTimer = null;
-                }, 250); // Delay to wait for double click
-            }
-        }
-        
-        function handleModalImageDblClick(e) {
-            e.stopPropagation();
-            clearTimeout(clickTimer); // Cancel single click
-            clickTimer = null;
-            
-            // Double-click action: toggle full zoom
-            if (zoomState !== 'full') {
-                zoomToFull();
-            } else {
-                resetZoom();
-            }
-        }
-        
-        function zoomToFit() {
-            modalImage.classList.remove('zoomed-full');
-            modalImage.classList.add('zoomed-fit');
-            zoomState = 'fit';
-        }
-        
-        function zoomToFull() {
-            modalImage.classList.remove('zoomed-fit');
-            modalImage.classList.add('zoomed-full');
-            zoomState = 'full';
-        }
-        
-        function resetZoom() {
-            modalImage.classList.remove('zoomed-fit');
-            modalImage.classList.remove('zoomed-full');
-            zoomState = 'normal';
-        }
+        modalImage.addEventListener('touchstart', onTouchStart, { passive: false });
+        modalImage.addEventListener('touchmove', onTouchMove, { passive: false });
+        modalImage.addEventListener('touchend', onTouchEnd);
+        modalImage.addEventListener('touchcancel', onTouchEnd);
+
+        // Reset state when the modal is opened initially
+        resetZoomState(); // Resets origin to center center initially
     }
 
     // --- Custom Context Menu Logic --- Start
