@@ -1081,6 +1081,14 @@
     </style>
     <!-- End Custom Context Menu Styles -->
 
+    /* Allow panning when zoomed in */
+    .modal-image.is-zoomed {
+      max-width: none !important;
+      max-height: none !important;
+      object-fit: unset !important;
+      cursor: grab;
+    }
+
 </head>
 <body>
     <!-- Update header structure -->
@@ -4292,6 +4300,72 @@
         updateFullscreenButton();
     }
     // --- Fullscreen API Logic --- End
+
+    // Pan/Zoom state variables for pinch-zoom and pan
+    let panX = 0, panY = 0;
+    let currentScale = 1.0;
+    let pinchStartMidpoint = {x: 0, y: 0};
+    let pinchStartPan = {x: 0, y: 0};
+    let pinchStartScale = 1.0;
+    let pinchStartDistance = 0;
+    let isPinching = false;
+
+    function getMidpoint(touches) {
+        const t1 = touches[0], t2 = touches[1];
+        return {
+            x: (t1.clientX + t2.clientX) / 2,
+            y: (t1.clientY + t2.clientY) / 2
+        };
+    }
+    function getDistance(touches) {
+        const t1 = touches[0], t2 = touches[1];
+        return Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+    }
+
+    modalImage.addEventListener('touchstart', function(e) {
+        if (e.touches.length === 2) {
+            isPinching = true;
+            pinchStartScale = currentScale;
+            pinchStartPan = {x: panX, y: panY};
+            pinchStartMidpoint = getMidpoint(e.touches);
+            pinchStartDistance = getDistance(e.touches); // <-- Set pinchStartDistance
+            // Optionally set transformOrigin here as before
+        }
+    }, { passive: false });
+
+    modalImage.addEventListener('touchmove', function(e) {
+        if (isPinching && e.touches.length === 2) {
+            e.preventDefault();
+            // Calculate scale as before
+            const newDistance = getDistance(e.touches);
+            currentScale = pinchStartScale * (newDistance / pinchStartDistance);
+
+            // Calculate pan
+            const newMidpoint = getMidpoint(e.touches);
+            panX = pinchStartPan.x + (newMidpoint.x - pinchStartMidpoint.x);
+            panY = pinchStartPan.y + (newMidpoint.y - pinchStartMidpoint.y);
+
+            // Apply transform
+            modalImage.style.transform = `translate(${panX}px, ${panY}px) scale(${currentScale})`;
+
+            // Toggle zoomed class for CSS
+            if (currentScale > 1.01) {
+                modalImage.classList.add('is-zoomed');
+            } else {
+                modalImage.classList.remove('is-zoomed');
+                panX = 0;
+                panY = 0;
+                modalImage.style.transform = `scale(${currentScale})`;
+            }
+        }
+    }, { passive: false });
+
+    modalImage.addEventListener('touchend', function(e) {
+        if (e.touches.length < 2) {
+            isPinching = false;
+            // Optionally clamp pan/scale or reset
+        }
+    });
 
     </script>
 </body>
