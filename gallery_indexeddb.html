@@ -3692,13 +3692,6 @@
             isTransformScheduled = false; // Allow next frame request
         }
 
-        function scheduleTransform() {
-            if (!isTransformScheduled) {
-                isTransformScheduled = true;
-                requestAnimationFrame(updateTransform);
-            }
-        }
-
         // --- Apply final transform with transition (resetting origin) ---
         function applyFinalZoomTransform(resetOrigin = true) {
             // Ensure final scale is constrained
@@ -3812,25 +3805,24 @@
                 pinchStartDistance = getDistance(e.touches);
                 pinchStartScale = currentScale;
 
-                // --- Set Transform Origin to Pinch Midpoint ---
-                const midpoint = getMidpoint(e.touches);
-                const rect = modalImage.getBoundingClientRect();
-                // Calculate origin relative to the element's top-left corner
-                const originX = midpoint.x - rect.left;
-                const originY = midpoint.y - rect.top;
-                modalImage.style.transformOrigin = `${originX}px ${originY}px`;
-                // --- End Set Transform Origin ---
-
-                 // We also need to *preserve* the current visual state by adjusting
-                 // the translation slightly when changing the origin.
-                 // This is complex. Let's *first* try without adjusting translation
-                 // and rely solely on the origin. If that's jumpy, we add this back.
-                 // currentTx = currentTx; // Keep current translation for now
-                 // currentTy = currentTy;
+                // --- Conditionally Set Transform Origin --- {{ edit_1 }}
+                if (Math.abs(pinchStartScale - 1.0) < 0.01) { // Check if starting scale is effectively 1.0
+                    // Start is 1x: Set origin to pinch midpoint for intuitive zoom-from-touch
+                    const midpoint = getMidpoint(e.touches);
+                    const rect = modalImage.getBoundingClientRect();
+                    const originX = midpoint.x - rect.left;
+                    const originY = midpoint.y - rect.top;
+                    modalImage.style.transformOrigin = `${originX}px ${originY}px`;
+                    console.log(`Pinch Start (at 1x): Dist=${pinchStartDistance.toFixed(2)}, Scale=${pinchStartScale.toFixed(2)}, Setting Origin=(${originX.toFixed(1)}px, ${originY.toFixed(1)}px)`);
+                } else {
+                    // Start is already zoomed: Keep origin centered to avoid offset issues
+                    modalImage.style.transformOrigin = 'center center';
+                    console.log(`Pinch Start (Zoomed >1x): Dist=${pinchStartDistance.toFixed(2)}, Scale=${pinchStartScale.toFixed(2)}, Keeping Origin=center center`);
+                }
+                // --- End Conditionally Set Transform Origin ---
 
                 modalImage.style.transition = 'none'; // Disable transition during pinch
                 modalImage.style.cursor = 'grabbing';
-                console.log(`Pinch Start: Dist=${pinchStartDistance.toFixed(2)}, Scale=${pinchStartScale.toFixed(2)}, Origin=(${originX.toFixed(1)}px, ${originY.toFixed(1)}px)`);
 
             } else if (e.touches.length < 2 && isPinching) {
                  // Finger lifted during pinch - treat as end
@@ -3849,16 +3841,50 @@
 
                 // --- Calculate new scale ---
                 if (pinchStartDistance === 0) return; // Avoid division by zero
+
+                // Revert to Multiplicative Calculation:
                 currentScale = pinchStartScale * (currentDistance / pinchStartDistance);
+
+                // Additive Calculation (commented out):
+                // const scaleRatio = currentDistance / pinchStartDistance;
+                // const scaleChange = scaleRatio - 1.0;
+                // currentScale = pinchStartScale + scaleChange;
+
                 // Clamp scale minimum during move (applyFinalZoomTransform clamps again)
                 currentScale = Math.max(1.0, currentScale);
 
                 // --- Translation calculation removed - handled by origin ---
 
-                // Schedule the transform update (only scale) using RAF
-                scheduleTransform();
+                // Apply transform directly instead of scheduling
+                updateTransform();
             }
         }
+
+        // --- RAF Callback --- (This function is now called directly by onTouchMove)
+        function updateTransform() {
+            // Apply the latest calculated scale directly (no transition during pinch)
+            // Translation is implicitly handled by the transform-origin set in onTouchStart
+            const scale = Math.max(1.0, currentScale); // Ensure scale doesn't go below 1
+
+            modalImage.style.transform = `scale(${scale})`; // Only apply scale
+
+            // Update cursor only if pinching
+            if (isPinching) {
+                modalImage.style.cursor = 'grabbing';
+            }
+
+            // isTransformScheduled = false; // No longer needed as we don't use RAF flag here
+        }
+
+        // Remove the scheduleTransform function as it's no longer used
+        /*
+        function scheduleTransform() {
+            if (!isTransformScheduled) {
+                isTransformScheduled = true;
+                requestAnimationFrame(updateTransform);
+            }
+        }
+        */ // {{ edit_2 }}
 
         function onTouchEnd(e) {
             if (isPinching) {
