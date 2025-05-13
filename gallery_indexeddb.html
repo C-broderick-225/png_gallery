@@ -7,6 +7,7 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖼️</text></svg>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <!-- Load PNG libraries from local files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         * {
             box-sizing: border-box;
@@ -1000,10 +1001,481 @@
             display: none;
         }
         /* End Hide Thumbnail Info Style */
-    </style>
 
-    <!-- Custom Context Menu Styles -->
-    <style>
+        /* PNG Editor Panel Styles */
+        #pngEditorPanel { /* Target by ID for specificity */
+            width: 380px; /* Slightly wider for better form layout */
+            right: -380px; /* Match new width */
+            background: rgba(35, 35, 35, 0.9); /* Darker, consistent with other panels */
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            box-shadow: -3px 0 15px rgba(0, 0, 0, 0.3);
+            border-left: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        #pngEditorPanel.active {
+            right: 0;
+        }
+
+        #pngEditorPanel .sliding-container-header {
+            padding: 12px 20px; /* Adjusted padding */
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(45, 45, 45, 0.7); /* Slight header distinction */
+        }
+
+        #pngEditorPanel .sliding-container-header h3 {
+            margin: 0;
+            color: #e0e0e0;
+            font-size: 16px; /* Consistent font size */
+            font-weight: 500;
+        }
+
+        #pngEditorPanel .sliding-container-close {
+            background: none;
+            border: none;
+            color: #b0b0b0; /* Softer close button color */
+            cursor: pointer;
+            padding: 5px;
+            font-size: 22px; /* Larger, clearer close icon */
+            line-height: 1;
+            transition: color 0.2s ease;
+        }
+
+        #pngEditorPanel .sliding-container-close:hover {
+            color: #ffffff;
+        }
+        
+        #pngEditorPanel .sliding-container-content {
+            padding: 20px;
+            overflow-y: auto;
+            /* Adjusted height calculation based on typical header and potential footer */
+            height: calc(100vh - 53px); /* Assuming header height of 53px */
+            display: flex;
+            flex-direction: column; /* Stack content vertically */
+            gap: 15px; /* Reduced gap between sections */
+        }
+
+        /* Styles for the new container sections within the editor */
+        #pngEditorPanel .editor-image-preview-container,
+        #pngEditorPanel .editor-controls,
+        #pngEditorPanel .metadata-form-container {
+            background: rgba(45, 45, 45, 0.6);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            border-radius: 8px;
+            padding: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        #pngEditorPanel .editor-section-title {
+            color: #e0e0e0;
+            font-size: 14px;
+            margin-bottom: 12px;
+            padding-left: 8px;
+            border-left: 2px solid rgba(255, 255, 255, 0.2);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+        
+        /* Old .editor-panel is no longer used for layout within #pngEditorPanel */
+        /* Clear any residual styling if it conflicts */
+        #pngEditorPanel .editor-panel {
+             display: block; /* Or none if it's truly empty now */
+             padding: 0;
+             margin: 0;
+             height: auto;
+        }
+
+        /* Specific styles for image preview within the editor */
+        #pngEditorPanel .editor-image-preview-container img#previewImage {
+            display: block; /* Ensure it behaves as a block for centering/margins */
+            max-width: 100%;
+            max-height: 180px; /* Adjusted max height for preview */
+            object-fit: contain;
+            border-radius: 6px;
+            background: #1a1a1a;
+            margin-top: 5px; /* Space below title if any */
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        /* Editor controls styling */
+        #pngEditorPanel .editor-controls .controls-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 5px; /* Space below title */
+        }
+
+        #pngEditorPanel .editor-controls .primary-btn { 
+            flex-grow: 1; 
+            background: rgba(66, 66, 66, 0.7); /* Slightly adjusted alpha */
+            color: #e0e0e0;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            padding: 10px 15px; 
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center; 
+            gap: 8px;
+            font-size: 14px;
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+        #pngEditorPanel .editor-controls .primary-btn:hover {
+            background: rgba(80, 80, 80, 0.8);
+            border-color: rgba(255, 255, 255, 0.15);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        #pngEditorPanel .editor-controls .primary-btn i {
+            font-size: 16px;
+            color: #b0b0b0; /* Slightly brighter default icon */
+            transition: color 0.2s ease;
+        }
+        #pngEditorPanel .editor-controls .primary-btn:hover i {
+            color: #e0e0e0;
+        }
+
+        /* Form styling within the editor */
+        #pngEditorPanel .metadata-form-container #editorMetadataForm { /* Target the form directly */
+            margin-top: 5px; /* Space below title */
+        }
+        #pngEditorPanel .metadata-form-container .form-group {
+            margin-bottom: 12px; 
+        }
+
+        #pngEditorPanel .metadata-form-container .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            color: #c0c0c0; 
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        #pngEditorPanel .metadata-form-container .form-group input[type="text"],
+        #pngEditorPanel .metadata-form-container .form-group textarea {
+            width: 100%;
+            padding: 10px 12px; 
+            background: rgba(50, 50, 50, 0.7); 
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px; 
+            color: #e0e0e0;
+            font-size: 14px;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        #pngEditorPanel .metadata-form-container .form-group input[type="text"]:focus,
+        #pngEditorPanel .metadata-form-container .form-group textarea:focus {
+            border-color: rgba(76, 175, 80, 0.7); 
+            box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.3);
+            outline: none;
+        }
+
+        #pngEditorPanel .metadata-form-container .form-group textarea {
+            height: 70px; /* Adjusted height */
+            resize: vertical;
+            min-height: 50px; /* Adjusted min-height */
+        }
+
+        /* Form actions styling */
+        #pngEditorPanel .metadata-form-container .form-actions {
+            padding-top: 15px;
+            margin-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end; 
+        }
+
+        #pngEditorPanel .metadata-form-container .form-actions button { 
+            color: #e0e0e0;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            padding: 10px 18px; 
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+        #pngEditorPanel .metadata-form-container .form-actions button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+        #pngEditorPanel .metadata-form-container .form-actions button i {
+            font-size: 16px;
+            transition: color 0.2s ease;
+        }
+
+        #pngEditorPanel .metadata-form-container .form-actions button.success-btn { 
+            background: rgba(76, 175, 80, 0.65);
+            border-color: rgba(76, 175, 80, 0.5);
+        }
+        #pngEditorPanel .metadata-form-container .form-actions button.success-btn:hover {
+            background: rgba(76, 175, 80, 0.8);
+            border-color: rgba(76, 175, 80, 0.7);
+        }
+        #pngEditorPanel .metadata-form-container .form-actions button.success-btn i {
+             color: #c8e6c9; 
+        }
+        #pngEditorPanel .metadata-form-container .form-actions button.success-btn:hover i {
+             color: #ffffff;
+        }
+
+        #pngEditorPanel .metadata-form-container .form-actions button.secondary-btn { 
+            background: rgba(66, 66, 66, 0.7);
+        }
+        #pngEditorPanel .metadata-form-container .form-actions button.secondary-btn:hover {
+            background: rgba(80, 80, 80, 0.8);
+        }
+         #pngEditorPanel .metadata-form-container .form-actions button.secondary-btn i {
+             color: #b0b0b0;
+        }
+        #pngEditorPanel .metadata-form-container .form-actions button.secondary-btn:hover i {
+             color: #e0e0e0;
+        }
+
+        #pngEditorPanel .metadata-form-container .form-actions button:disabled {
+            background: rgba(55, 55, 55, 0.6) !important;
+            color: #707070 !important;
+            border-color: rgba(255,255,255,0.05) !important;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+        #pngEditorPanel .metadata-form-container .form-actions button:disabled i {
+            color: #606060 !important;
+        }
+
+        /* Clean up general .image-preview and .metadata-form if they were used elsewhere */
+        /* For now, assume they are specific enough or overridden by the #pngEditorPanel selectors */
+
+        /* Add media query for responsiveness */
+        @media (max-width: 768px) {
+            .header-controls {
+                display: none; /* Hide the button row on smaller screens */
+            }
+
+            .header-title {
+                font-size: 20px; /* Optionally adjust title size */
+            }
+        }
+
+        /* Added for selection */
+        .thumbnail.selected {
+            border: 3px solid #4CAF50; /* Green border for selection */
+            box-shadow: 0 0 15px rgba(76, 175, 80, 0.5);
+        }
+
+        .thumbnail:hover.selected { /* Keep hover effect consistent */
+             transform: translateY(-5px) scale(1.02);
+             box-shadow: 0 0 15px rgba(76, 175, 80, 0.5), 0 8px 24px rgba(0, 0, 0, 0.3);
+             border-color: #4CAF50;
+        }
+
+        /* Masonry Layout Styles (using CSS Columns) */
+        .gallery-grid.masonry-active {
+            display: block; /* Override grid display */
+            column-count: var(--masonry-columns, 4); /* Default columns, adjustable */
+            column-gap: 20px; /* Match grid gap */
+            grid-template-columns: unset; /* Remove grid column definition */
+            padding: 0; /* Remove grid padding if needed */
+        }
+
+        .gallery-grid.masonry-active .thumbnail {
+            display: inline-block; /* Allow items to flow into columns */
+            width: 100%; /* Make items fill column width */
+            margin-bottom: 20px; /* Space between items vertically */
+            break-inside: avoid; /* Prevent items breaking across columns */
+            /* Reset fixed height/aspect ratio for masonry */
+            height: auto !important; 
+            aspect-ratio: auto !important;
+            /* Reset transforms that might interfere with column layout */
+            transform: none !important; 
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); /* Keep original shadow */
+            border-color: rgba(255, 255, 255, 0.05); /* Keep original border */
+        }
+
+        /* Remove hover transform in masonry mode, keep shadow/border change */
+        .gallery-grid.masonry-active .thumbnail:hover {
+            transform: none !important; 
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        /* Ensure selected styles still apply border/shadow in masonry */
+        .gallery-grid.masonry-active .thumbnail.selected {
+             border: 3px solid #4CAF50;
+             box-shadow: 0 0 15px rgba(76, 175, 80, 0.5);
+        }
+        
+        .gallery-grid.masonry-active .thumbnail:hover.selected {
+             transform: none !important; 
+             box-shadow: 0 0 15px rgba(76, 175, 80, 0.5), 0 8px 24px rgba(0, 0, 0, 0.3);
+             border-color: #4CAF50;
+        }
+        /* End Masonry Layout Styles */
+
+        /* Select Mode Styles */
+        .select-mode-header {
+            display: none;
+            position: fixed;
+            top: 60px;
+            left: 0;
+            right: 0;
+            background: rgba(45, 45, 45, 0.9);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: 10px 20px;
+            z-index: 1000;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .select-mode-header span {
+            color: #e0e0e0;
+            font-size: 14px;
+        }
+
+        .select-mode-header button {
+            background: rgba(66, 66, 66, 0.6);
+            color: #e0e0e0;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 15px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .select-mode-header button:hover {
+            background: rgba(97, 97, 97, 0.7);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .select-mode-header button i {
+            font-size: 16px;
+            color: #909090;
+            transition: color 0.2s ease;
+        }
+
+        .select-mode-header button:hover i {
+            color: #e0e0e0;
+        }
+
+        body.select-mode-active .select-mode-header {
+            display: flex;
+        }
+
+        .thumbnail-checkbox-overlay {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: #4CAF50;
+        }
+
+        .thumbnail.selected .thumbnail-checkbox-overlay {
+            display: flex;
+        }
+
+        body.select-mode-active .thumbnail-checkbox-overlay {
+            display: flex;
+        }
+
+        /* Select Mode Styles */
+        #selectModeHeader {
+            display: none; /* Hidden by default */
+            position: fixed;
+            top: 60px; /* Below main header */
+            left: 0;
+            right: 0;
+            height: 50px;
+            background: rgba(76, 175, 80, 0.8); /* Greenish to indicate selection */
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            z-index: 998; /* Below main header, above content */
+            padding: 0 20px;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            color: #ffffff;
+        }
+        body.select-mode-active #selectModeHeader {
+            display: flex; /* Show when select mode is active */
+        }
+        #selectModeHeader .select-mode-controls button {
+            background: rgba(255, 255, 255, 0.2);
+            color: #ffffff;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+        #selectModeHeader .select-mode-controls button:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        .thumbnail-checkbox-overlay {
+            display: none; /* Hidden by default */
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 24px;
+            height: 24px;
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 50%;
+            color: white;
+            font-size: 14px;
+            justify-content: center;
+            align-items: center;
+            z-index: 2; /* Above image */
+            pointer-events: none; /* Pass clicks through */
+        }
+        body.select-mode-active .thumbnail-checkbox-overlay {
+            display: flex; /* Show checkboxes in select mode */
+        }
+        .thumbnail.selected .thumbnail-checkbox-overlay i.fa-check-circle {
+            /* Style for the selected checkmark itself if needed */
+            color: #4CAF50; /* Match border */
+        }
+
+        /* Hide Thumbnail Info Style */
+        body.hide-thumbnail-info .thumbnail-info {
+            display: none;
+        }
+        /* End Hide Thumbnail Info Style */
+
+        /* Custom Context Menu Styles */
         .custom-context-menu {
             position: absolute;
             display: none;
@@ -1079,9 +1551,8 @@
             }
         }
     </style>
-    <!-- End Custom Context Menu Styles -->
 
-    /* Allow panning when zoomed in */
+    <!-- Allow panning when zoomed in -->
     .modal-image.is-zoomed {
       max-width: none !important;
       max-height: none !important;
@@ -1203,51 +1674,51 @@
             <button class="sliding-container-close" aria-label="Close Editor">&times;</button>
         </div>
         <div class="sliding-container-content">
-            <div class="editor-panel">
-                <div class="image-preview">
-                    <h3>Image Preview</h3>
-                    <img id="previewImage" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" alt="Preview">
+            <!-- Removed the old .editor-panel div -->
+            <div class="editor-image-preview-container">
+                <h3 class="editor-section-title">Preview</h3>
+                <img id="previewImage" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" alt="Preview">
+            </div>
+            
+            <div class="editor-controls">
+                <h3 class="editor-section-title">Load Image</h3>
+                <div class="controls-group">
+                    <button id="editorOpenFileBtn" class="primary-btn"><i class="fas fa-folder-open"></i>Open File</button>
+                    <button id="editorLoadFromUrlBtn" class="primary-btn"><i class="fas fa-link"></i>Load from URL</button>
                 </div>
-                
-                <div class="editor-controls">
-                    <div class="controls-group">
-                        <button id="editorOpenFileBtn" class="primary-btn"><i class="fas fa-folder-open"></i>Open File</button>
-                        <button id="editorLoadFromUrlBtn" class="primary-btn"><i class="fas fa-link"></i>Load from URL</button>
+            </div>
+            
+            <div class="metadata-form-container">
+                <h3 class="editor-section-title">Edit Metadata</h3>
+                <form id="editorMetadataForm">
+                    <div class="form-group">
+                        <label for="title">Title</label>
+                        <input type="text" id="title" name="Title" placeholder="Image Title">
                     </div>
-                </div>
-                
-                <div class="metadata-form">
-                    <h3>Edit Metadata</h3>
-                    <form id="editorMetadataForm">
-                        <div class="form-group">
-                            <label for="title">Title</label>
-                            <input type="text" id="title" name="Title" placeholder="Image Title">
-                        </div>
-                        <div class="form-group">
-                            <label for="author">Author</label>
-                            <input type="text" id="author" name="Author" placeholder="Author Name">
-                        </div>
-                        <div class="form-group">
-                            <label for="description">Description</label>
-                            <textarea id="description" name="Description" placeholder="Image Description"></textarea>
-                        </div>
-                        <div class="form-group">
-                            <label for="keywords">Keywords (comma-separated)</label>
-                            <input type="text" id="keywords" name="Keywords" placeholder="keyword1, keyword2, ...">
-                        </div>
-                        <div class="form-group">
-                            <label for="copyright">Copyright</label>
-                            <input type="text" id="copyright" name="Copyright" placeholder="Copyright Information">
-                        </div>
-                        <div class="form-group">
-                            <label for="software">Software</label>
-                            <input type="text" id="software" name="Software" placeholder="Software Used">
-                        </div>
-                    </form>
-                    <div class="form-actions">
-                        <button id="editorSaveBtn" class="success-btn" disabled><i class="fas fa-save"></i>Save PNG</button>
-                        <button id="editorAddToGalleryBtn" class="secondary-btn" disabled><i class="fas fa-plus"></i>Add to Gallery</button>
+                    <div class="form-group">
+                        <label for="author">Author</label>
+                        <input type="text" id="author" name="Author" placeholder="Author Name">
                     </div>
+                    <div class="form-group">
+                        <label for="description">Description</label>
+                        <textarea id="description" name="Description" placeholder="Image Description"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="keywords">Keywords (comma-separated)</label>
+                        <input type="text" id="keywords" name="Keywords" placeholder="keyword1, keyword2, ...">
+                    </div>
+                    <div class="form-group">
+                        <label for="copyright">Copyright</label>
+                        <input type="text" id="copyright" name="Copyright" placeholder="Copyright Information">
+                    </div>
+                    <div class="form-group">
+                        <label for="software">Software</label>
+                        <input type="text" id="software" name="Software" placeholder="Software Used">
+                    </div>
+                </form>
+                <div class="form-actions">
+                    <button id="editorSaveBtn" class="success-btn" disabled><i class="fas fa-save"></i>Save PNG</button>
+                    <button id="editorAddToGalleryBtn" class="secondary-btn" disabled><i class="fas fa-plus"></i>Add to Gallery</button>
                 </div>
             </div>
         </div>
@@ -1892,7 +2363,6 @@
                             entry.tags = [];
                         }
                         
-                        // entry.keywords = await getKeywordsFromEntry(entry); // Remove PNG-specific keyword extraction
                         imageEntries.push(entry);
                     }
 
@@ -3364,7 +3834,6 @@
     // Setup event listeners (Existing function, ensure bulk tag listeners are added)
     function setupBulkTagListeners() {
         // Ensure elements are available before adding listeners
-        // if (!tagSelectedBtn || !menuTagSelectedBtn || !closeBulkTagModalBtn || !cancelBulkTagBtn || !applyBulkTagBtn || !bulkTagInput) { // Modified check
         if (!menuTagSelectedBtn || !closeBulkTagModalBtn || !cancelBulkTagBtn || !applyBulkTagBtn || !bulkTagInput) { // Check only for remaining/necessary elements
             console.error("Bulk Tag Modal elements not found, cannot attach listeners.");
             return;
@@ -3408,41 +3877,71 @@
 
         const indicesToDownload = [...selectedIndices]; // Copy selected indices
         const total = indicesToDownload.length;
-        showStatus(`Starting download for ${total} selected image(s)...`, 'info');
+        const toastId = showStatus(`Preparing to download ${total} image(s) as a ZIP...`, 'info', { persistent: true, showSpinner: true });
+
+        if (typeof JSZip === 'undefined') {
+            showStatus('JSZip library not loaded. Cannot create ZIP file.', 'error', { id: toastId, persistent: false, showSpinner: false });
+            console.error('JSZip is not defined. Make sure the library is loaded.');
+            return;
+        }
+
+        const zip = new JSZip();
+        let filesAdded = 0;
+
+        // Helper function to convert data URL to Blob
+        function dataURLtoBlob(dataurl) {
+            let arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
+                bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
+            while(n--){
+                u8arr[n] = bstr.charCodeAt(n);
+            }
+            return new Blob([u8arr], {type:mime});
+        }
 
         indicesToDownload.forEach((index, i) => {
             const entry = imageEntries[index];
             if (!entry || !entry.base64Data || !entry.name) {
                 console.error(`Skipping download for index ${index}: Missing data.`);
-                showStatus(`Skipping download for one image: Missing data. (${i + 1}/${total})`, 'error');
+                showStatus(`Skipping one image: Missing data. (${i + 1}/${total})`, 'error');
                 return; // Skip this one
             }
 
-            // Use a slight delay for each download trigger if needed, but often not required
-            // setTimeout(() => {
-                try {
-                    const link = document.createElement('a');
-                    link.href = entry.base64Data;
-                    link.download = entry.name;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    console.log(`Download triggered for: ${entry.name}`);
-                } catch (error) {
-                    console.error(`Error triggering download for ${entry.name}:`, error);
-                    showStatus(`Error downloading ${entry.name}: ${error.message}`, 'error');
-                }
-            // }, i * 100); // Example: 100ms delay between each download trigger
+            try {
+                const blob = dataURLtoBlob(entry.base64Data);
+                zip.file(entry.name, blob);
+                filesAdded++;
+            } catch (error) {
+                console.error(`Error processing image ${entry.name} for zipping:`, error);
+                showStatus(`Error adding ${entry.name} to ZIP: ${error.message}`, 'error');
+            }
         });
 
-        // Deselect after triggering downloads
-        // selectedIndices.forEach(index => {
-        //     const thumb = galleryGrid.querySelector(`.thumbnail[data-index="${index}"]`);
-        //     if (thumb) thumb.classList.remove('selected');
-        // });
-        // selectedIndices = [];
-        // updateSelectionUI();
+        if (filesAdded === 0) {
+            showStatus('No files could be added to the ZIP archive.', 'error', { id: toastId, persistent: false, showSpinner: false });
+            return;
+        }
+
+        showStatus(`Generating ZIP file for ${filesAdded} image(s)...`, 'info', { id: toastId, persistent: true, showSpinner: true });
+
+        zip.generateAsync({ type: "blob" })
+            .then(function(content) {
+                const fileName = `gallery_images_${new Date().toISOString().slice(0,10)}.zip`;
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(content);
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(link.href); // Clean up object URL
+                showStatus(`Successfully downloaded ${filesAdded} image(s) as ${fileName}`, 'success', { id: toastId, persistent: false, showSpinner: false });
+            })
+            .catch(function(err) {
+                console.error("Error generating ZIP file:", err);
+                showStatus(`Error generating ZIP file: ${err.message}`, 'error', { id: toastId, persistent: false, showSpinner: false });
+            });
+
         // Decide if you want to automatically deselect after downloading
+        // exitSelectMode(); // Optionally exit select mode
     }
     // --- Download Selected Images Function --- End
 
@@ -3488,12 +3987,6 @@
 
         // Now uses the cached keywords << Update comment
         for (const entry of imageEntries) {
-            // if (entry && entry.keywords) { // Check if keywords Set exists << DELETE THIS BLOCK
-            //     if (entry.base64Data && entry.base64Data.startsWith('data:image/png;')) {
-            //         pngCount++;
-            //     }
-            //     entry.keywords.forEach(tag => allTags.add(tag)); // Add directly from Set
-            // }
             // Instead, read from entry.tags array
             if (entry && Array.isArray(entry.tags)) {
                 entry.tags.forEach(tag => allTags.add(tag.toLowerCase())); // Ensure lowercase
@@ -3506,14 +3999,8 @@
         tagListContainer.innerHTML = '';
 
         if (allTags.size === 0) {
-            // if (pngCount === 0) { << DELETE THIS BLOCK
-            //      tagListContainer.innerHTML = '<span style="color: #909090; font-size: 12px; width: 100%;">No PNG images found.</span>';
-            // } else {
-            //      tagListContainer.innerHTML = '<span style="color: #909090; font-size: 12px; width: 100%;">No tags found in PNG images.</span>';
-            // }
             tagListContainer.innerHTML = '<span style="color: #909090; font-size: 12px; width: 100%;">No tags found. Add tags using the bulk tag feature.</span>';
             // Optionally hide the whole section if no tags:
-            // tagsMenuSection.style.display = 'none';
         } else {
             const sortedTags = Array.from(allTags).sort();
             console.log(`[Tag List] Displaying ${sortedTags.length} unique tags:`, sortedTags);
@@ -3682,7 +4169,6 @@
         let pinchStartScale = 1.0;
         
         let isPinching = false;
-        let isTransformScheduled = false; // RAF flag, though currently direct application is used
 
         // New state variables for panning
         let isPanning = false;
@@ -3691,21 +4177,7 @@
 
 
         // --- RAF Callback (Currently not used by pinch, direct application in onTouchMove) ---
-        // function updateTransform() {
-        //     const scale = Math.max(1.0, currentScale);
-        //     modalImage.style.transform = `translate(${currentTx}px, ${currentTy}px) scale(${scale})`;
-        //     if (isPinching) {
-        //         modalImage.style.cursor = 'grabbing';
-        //     }
-        //     isTransformScheduled = false;
-        // }
 
-        // function scheduleTransform() {
-        //     if (!isTransformScheduled) {
-        //         isTransformScheduled = true;
-        //         requestAnimationFrame(updateTransform);
-        //     }
-        // }
 
         // --- Apply final transform with transition (resetting origin if specified) ---
         function applyFinalZoomTransform(resetOrigin = true) {
@@ -3750,7 +4222,6 @@
             isPinching = false;
             isPanning = false; // Reset panning state
             pinchStartDistance = 0;
-            // isTransformScheduled = false; // Not strictly needed if not using RAF here
 
             modalImage.style.transition = 'none'; // Apply reset directly
             applyFinalZoomTransform(true); // Resets origin to center, tx/ty to 0, scale to 1, and sets correct cursor

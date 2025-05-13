@@ -36,3 +36,33 @@
 ### 7. UI State
 - [ ] Do loading indicators appear during lengthy operations?
 - [ ] Are buttons/controls enabled/disabled appropriately based on the state? 
+
+const pngEditorPanel = document.getElementById('pngEditorPanel'); 
+
+<div id="pngEditorPanel" class="sliding-container">
+    <div class="sliding-container-header">
+        <h3>PNG Metadata Editor</h3>
+        <button class="sliding-container-close" aria-label="Close Editor">&times;</button>
+    </div>
+    <div class="sliding-container-content">
+        <div class="editor-panel">
+            <div class="image-preview">
+                <h3>Image Preview</h3>
+                <img id="previewImage" src="data:image/png;base64,..." alt="Preview">
+            </div>
+            <div class="editor-controls">
+                <!-- ... buttons like Open File, Load from URL ... -->
+            </div>
+            <div class="metadata-form">
+                <h3>Edit Metadata</h3>
+                <form id="editorMetadataForm">
+                    <!-- ... form inputs for Title, Author, Description, etc. ... -->
+                </form>
+                <div class="form-actions">
+                    <button id="editorSaveBtn" class="success-btn" disabled><i class="fas fa-save"></i>Save PNG</button>
+                    <button id="editorAddToGalleryBtn" class="secondary-btn" disabled><i class="fas fa-plus"></i>Add to Gallery</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div> 

@@ -6,6 +6,8 @@
     <title>Image Gallery</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖼️</text></svg>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="js/tEXt-parser.js"></script> <!-- Assuming local path -->
     <style>
         * {
             box-sizing: border-box;
@@ -1216,6 +1218,107 @@
     // Wrap entire script in an IIFE
     (function() {
         'use strict'; // Enable strict mode
+
+        // --- PNGMetadata Class (using tEXt-parser) ---
+        class PNGMetadata {
+            constructor() {
+                console.log('PNGMetadata constructor called (using tEXt-parser).');
+                this.libraryPromise = new Promise((resolve, reject) => {
+                    if (window.tEXt) {
+                        console.log('tEXt-parser library already loaded.');
+                        resolve(window.tEXt);
+                        return;
+                    }
+                    // Script tag for tEXt-parser.js should already be in HTML head.
+                    // This is a fallback or a check.
+                    let attempts = 0;
+                    const interval = setInterval(() => {
+                        attempts++;
+                        if (window.tEXt) {
+                            clearInterval(interval);
+                            console.log('tEXt-parser library loaded via interval check.');
+                            resolve(window.tEXt);
+                        } else if (attempts > 50) { // Wait for up to 5 seconds
+                            clearInterval(interval);
+                            console.error('tEXt-parser library failed to load after 5s.');
+                            reject(new Error('tEXt-parser library load timeout'));
+                        }
+                    }, 100);
+                });
+            }
+
+            async ensureLibraryLoaded() {
+                console.log('ensureLibraryLoaded (tEXt-parser) called. Waiting for libraryPromise...');
+                try {
+                    await this.libraryPromise;
+                    if (!window.tEXt || typeof window.tEXt.decode !== 'function' || typeof window.tEXt.encode !== 'function') {
+                        throw new Error('tEXt-parser not properly initialized on window.');
+                    }
+                    console.log('libraryPromise (tEXt-parser) resolved. window.tEXt is available.');
+                    return true;
+                } catch (error) {
+                    console.error('Failed to load or initialize tEXt-parser library:', error);
+                    showStatus('PNG Library (tEXt-parser) failed to load. Metadata operations unavailable.', 'error');
+                    return false;
+                }
+            }
+
+            async readMetadata(blob) {
+                console.log('readMetadata (tEXt-parser) called for:', blob.name);
+                if (!await this.ensureLibraryLoaded()) {
+                    throw new Error('tEXt-parser library failed to load.');
+                }
+
+                if (blob.type !== 'image/png') {
+                    console.warn('Attempted to read metadata from non-PNG file:', blob.name);
+                    return {};
+                }
+
+                try {
+                    const buffer = await blob.arrayBuffer();
+                    console.log('Calling tEXt.decode...');
+                    const metadata = window.tEXt.decode(buffer);
+                    console.log('Decoded PNG metadata (tEXt-parser):', metadata);
+                    return metadata;
+                } catch (error) {
+                    console.error('Error reading PNG metadata (tEXt-parser):', error);
+                    showStatus('Failed to read PNG metadata: ' + error.message, 'error');
+                    return {};
+                }
+            }
+
+            async writeMetadata(blob, metadataToWrite) {
+                console.log('writeMetadata (tEXt-parser) called for:', blob.name);
+                if (!await this.ensureLibraryLoaded()) {
+                    throw new Error('tEXt-parser library failed to load.');
+                }
+
+                if (blob.type !== 'image/png') {
+                    console.warn('Attempted to write metadata to non-PNG file:', blob.name);
+                    return blob;
+                }
+
+                try {
+                    const buffer = await blob.arrayBuffer();
+                    const cleanedMetadata = {};
+                    for (const key in metadataToWrite) {
+                        if (metadataToWrite[key] && String(metadataToWrite[key]).trim() !== '') {
+                            cleanedMetadata[key] = String(metadataToWrite[key]).trim();
+                        }
+                    }
+
+                    console.log('Calling tEXt.encode with metadata:', cleanedMetadata);
+                    const newBuffer = window.tEXt.encode(cleanedMetadata, buffer);
+                    console.log('Encoded new PNG data (tEXt-parser).');
+                    return new Blob([newBuffer], { type: 'image/png' });
+                } catch (error) {
+                    console.error('Error writing PNG metadata (tEXt-parser):', error);
+                    showStatus('Failed to write PNG metadata: ' + error.message, 'error');
+                    return blob;
+                }
+            }
+        }
+        // --- End PNGMetadata Class ---
 
         // --- Constants ---
         const ITEMS_PER_PAGE = 30; // Increased for potentially better performance
