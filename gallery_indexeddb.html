@@ -1565,6 +1565,153 @@
                 font-size: 18px;
             }
         }
+
+        /* Style for disabled menu items if needed later */
+        .custom-context-menu li.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background: transparent !important; /* Override hover */
+        }
+
+        .custom-context-menu li.disabled:hover i {
+            color: #909090; /* Keep icon color disabled */
+        }
+
+        /* Custom Prompt/Confirm Modals */
+        .custom-modal-overlay {
+            display: none; /* Hidden by default */
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7); /* Darker overlay for better focus */
+            z-index: 1005; /* Higher than image modal, lower than toast */
+            opacity: 0;
+            transition: opacity 0.2s ease-out;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .custom-modal-overlay.show {
+            display: flex; /* Use flex for centering */
+            opacity: 1;
+        }
+
+        .custom-modal-content {
+            background: rgba(45, 45, 45, 0.95); /* Consistent with other panels */
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 25px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 5px 25px rgba(0, 0, 0, 0.5);
+            width: 90%;
+            max-width: 450px; /* Max width for prompts/confirms */
+            transform: scale(0.95);
+            transition: transform 0.2s ease-out;
+        }
+
+        .custom-modal-overlay.show .custom-modal-content {
+            transform: scale(1);
+        }
+
+        .custom-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .custom-modal-header h3 {
+            color: #e0e0e0;
+            margin: 0;
+            font-size: 18px;
+            font-weight: 500;
+        }
+
+        .custom-modal-body p {
+            color: #c0c0c0;
+            font-size: 15px;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        .custom-modal-body input[type="text"],
+        .custom-modal-body input[type="url"] { /* Added url type for consistency */
+            width: 100%;
+            padding: 12px 15px;
+            background: rgba(30, 30, 30, 0.8); /* Darker input bg */
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 15px;
+            margin-bottom: 20px;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
+        }
+         .custom-modal-body input[type="text"]:focus,
+         .custom-modal-body input[type="url"]:focus {
+            border-color: rgba(76, 175, 80, 0.7);
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.2), 0 0 0 2px rgba(76, 175, 80, 0.3);
+            outline: none;
+         }
+
+
+        .custom-modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+
+        .custom-modal-actions button {
+            background: rgba(66, 66, 66, 0.7);
+            color: #e0e0e0;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            padding: 10px 20px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 14px;
+            font-weight: 500;
+            min-width: 90px; /* Ensure buttons have decent width */
+        }
+
+        .custom-modal-actions button:hover {
+            background: rgba(80, 80, 80, 0.8);
+            border-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .custom-modal-actions button.primary {
+            background: rgba(76, 175, 80, 0.7); /* Green for primary action */
+            border-color: rgba(76, 175, 80, 0.5);
+        }
+
+        .custom-modal-actions button.primary:hover {
+            background: rgba(76, 175, 80, 0.9);
+            border-color: rgba(76, 175, 80, 0.7);
+        }
+        /* End Custom Prompt/Confirm Modals */
+
+        /* Mobile-specific styling */
+        @media (max-width: 768px) {
+            .custom-context-menu {
+                min-width: 200px; /* Wider on mobile */
+                max-width: 80%; /* Limit width on small screens */
+            }
+            
+            .custom-context-menu li {
+                padding: 16px; /* Even larger touch targets on mobile */
+                font-size: 16px; /* Larger text */
+            }
+            
+            .custom-context-menu li i {
+                width: 20px; /* Larger icons */
+                font-size: 18px;
+            }
+        }
     </style>
 
     <!-- Allow panning when zoomed in -->
@@ -1780,6 +1927,7 @@
     <div id="customContextMenu" class="custom-context-menu">
         <ul>
             <li data-action="view"><i class="fas fa-eye"></i> View</li>
+            <li data-action="rename"><i class="fas fa-i-cursor"></i> Rename</li>
             <li data-action="select"><i class="fas fa-check-square"></i> Select</li>
             <li data-action="select-all"><i class="fas fa-check-double"></i> Select All</li> <!-- Added -->
             <li data-action="tag"><i class="fas fa-tags"></i> Tag Selected</li>
@@ -1788,6 +1936,39 @@
         </ul>
     </div>
     <!-- End Custom Context Menu -->
+
+    <!-- Custom Prompt Modal -->
+    <div id="customPromptModal" class="custom-modal-overlay">
+        <div class="custom-modal-content">
+            <div class="custom-modal-header">
+                <h3 id="customPromptTitle">Prompt</h3>
+            </div>
+            <div class="custom-modal-body">
+                <p id="customPromptMessage"></p>
+                <input type="text" id="customPromptInput" placeholder="Enter value">
+            </div>
+            <div class="custom-modal-actions">
+                <button id="customPromptCancel">Cancel</button>
+                <button id="customPromptOK" class="primary">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Confirm Modal -->
+    <div id="customConfirmModal" class="custom-modal-overlay">
+        <div class="custom-modal-content">
+            <div class="custom-modal-header">
+                <h3 id="customConfirmTitle">Confirm</h3>
+            </div>
+            <div class="custom-modal-body">
+                <p id="customConfirmMessage">Are you sure?</p>
+            </div>
+            <div class="custom-modal-actions">
+                <button id="customConfirmCancel">Cancel</button>
+                <button id="customConfirmOK" class="primary">OK</button>
+            </div>
+        </div>
+    </div>
 
     <script>
     // Modify PNGMetadata class to use tEXt-parser
@@ -1937,6 +2118,13 @@
     // --- Download Selected Elements & References --- Start
     let downloadSelectedBtn, menuDownloadSelectedBtn;
     // --- Download Selected Elements & References --- End
+
+    // --- Custom Prompt/Confirm Modal Elements & References --- Start
+    let customPromptModal, customPromptTitle, customPromptMessage, customPromptInput, customPromptOK, customPromptCancel;
+    let customConfirmModal, customConfirmTitle, customConfirmMessage, customConfirmOK, customConfirmCancel;
+    let promptResolve = null;
+    let confirmResolve = null;
+    // --- Custom Prompt/Confirm Modal Elements & References --- End
 
     // --- Custom Context Menu Elements & State --- Start
     let customContextMenu = null;
@@ -2103,6 +2291,22 @@
             // --- Initialize Custom Context Menu Element --- Start
             customContextMenu = document.getElementById('customContextMenu');
             // --- Initialize Custom Context Menu Element --- End
+
+            // --- Initialize Custom Prompt/Confirm Modal Elements --- Start
+            customPromptModal = document.getElementById('customPromptModal');
+            customPromptTitle = document.getElementById('customPromptTitle');
+            customPromptMessage = document.getElementById('customPromptMessage');
+            customPromptInput = document.getElementById('customPromptInput');
+            customPromptOK = document.getElementById('customPromptOK');
+            customPromptCancel = document.getElementById('customPromptCancel');
+
+            customConfirmModal = document.getElementById('customConfirmModal');
+            customConfirmTitle = document.getElementById('customConfirmTitle');
+            customConfirmMessage = document.getElementById('customConfirmMessage');
+            customConfirmOK = document.getElementById('customConfirmOK');
+            customConfirmCancel = document.getElementById('customConfirmCancel');
+            // --- Initialize Custom Prompt/Confirm Modal Elements --- End
+
             await loadImagesFromDB();
             setupEventListeners(); // Existing listeners
             setupBulkTagListeners(); // Add bulk tag listeners
@@ -3223,6 +3427,13 @@
                 case 'Escape':
                     closeModal();
                     break;
+            }
+        });
+
+        // Add Escape key listener to exit select mode
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && isSelectModeActive) {
+                exitSelectMode();
             }
         });
 
@@ -4525,7 +4736,7 @@
         const action = actionItem.dataset.action;
 
         // Ensure the index is valid *only for actions that require it*
-        if ([ 'view', 'select', 'tag', 'download', 'delete'].includes(action)) {
+        if ([ 'view', 'select', 'tag', 'download', 'delete', 'rename'].includes(action)) { // Added 'rename' here
              if (targetIndex === -1 || targetIndex < 0 || targetIndex >= imageEntries.length) {
                  console.error('Invalid target index for context menu action:', targetIndex);
                  hideContextMenu();
@@ -4596,6 +4807,127 @@
                         showStatus('Image deleted successfully', 'success');
                     } catch (error) {
                         showStatus('Failed to delete image: ' + error.message, 'error');
+                    }
+                }
+                break;
+            case 'rename':
+                // Target index is already validated for rename
+                let performSingleRename = true;
+
+                if (isSelectModeActive && selectedIndices.length > 1 && selectedIndices.includes(targetIndex)) {
+                    // const proceedWithBatch = confirm(`You have ${selectedIndices.length} items selected. Do you want to rename them sequentially? (e.g., basename_1, basename_2, ...)`);
+                    const proceedWithBatch = await showCustomConfirm(
+                        'Batch Rename',
+                        `You have ${selectedIndices.length} items selected. Do you want to rename them sequentially? (e.g., basename_1, basename_2, ...)`
+                    );
+
+                    if (proceedWithBatch) {
+                        performSingleRename = false;
+                        // const baseName = prompt("Enter the base name for renaming (e.g., MyImage):", "Image");
+                        const baseName = await showCustomPrompt(
+                            'Batch Rename Base Name',
+                            'Enter the base name for renaming (e.g., MyImage):'
+                            , 'Image'
+                        );
+
+                        if (baseName && baseName.trim() !== '') {
+                            let successCount = 0;
+                            let errorCount = 0;
+                            const indicesToRename = [...selectedIndices].sort((a,b) => a - b); // Sort indices to ensure consistent numbering if selection order was erratic
+                            let batchRenameToastId = null; // Variable to store the toast ID
+
+                            // Show initial persistent toast and store its ID
+                            batchRenameToastId = showStatus(`Batch renaming ${indicesToRename.length} items...`, 'info', { persistent: true, showSpinner: true });
+
+                            for (let i = 0; i < indicesToRename.length; i++) {
+                                const currentIndexInImageEntries = indicesToRename[i];
+                                const entry = imageEntries[currentIndexInImageEntries];
+                                const originalName = entry.name;
+                                const originalExtension = originalName.substring(originalName.lastIndexOf('.')) || '';
+                                const newFullName = `${baseName.trim()}_${i + 1}${originalExtension}`;
+
+                                try {
+                                    imageEntries[currentIndexInImageEntries].name = newFullName;
+                                    const transaction = db.transaction([IMAGE_STORE_NAME], 'readwrite');
+                                    const store = transaction.objectStore(IMAGE_STORE_NAME);
+                                    const entryWithNewName = { ...imageEntries[currentIndexInImageEntries] }; // Already updated in memory
+
+                                    await new Promise((resolve, reject) => {
+                                        const request = store.put(entryWithNewName);
+                                        request.onsuccess = resolve;
+                                        request.onerror = () => reject(request.error);
+                                    });
+                                    successCount++;
+                                } catch (error) {
+                                    console.error(`Error renaming ${originalName} to ${newFullName}:`, error);
+                                    imageEntries[currentIndexInImageEntries].name = originalName; // Revert in-memory
+                                    errorCount++;
+                                }
+                            }
+                            displayImages();
+                            exitSelectMode(); // Clear selection after batch rename
+                            
+                            // Update the existing toast with the completion message
+                            const finalMessage = `Batch rename complete. ${successCount} renamed, ${errorCount} failed.`;
+                            const finalType = errorCount > 0 ? 'error' : 'success';
+                            showStatus(finalMessage, finalType, { id: batchRenameToastId, persistent: false, showSpinner: false });
+
+                        } else {
+                            showStatus('Batch rename cancelled: No base name provided.', 'info');
+                            performSingleRename = true; // Fallback to single rename if base name is cancelled
+                        }
+                    }
+                    // If user cancels batch confirmation, proceedWithBatch will be false, and performSingleRename remains true
+                }
+
+                if (performSingleRename) {
+                    // Single rename logic (for the item right-clicked)
+                    const entryToRename = imageEntries[targetIndex];
+                    const currentNameWithoutExtension = entryToRename.name.substring(0, entryToRename.name.lastIndexOf('.') > -1 ? entryToRename.name.lastIndexOf('.') : entryToRename.name.length);
+                    const currentExtension = entryToRename.name.lastIndexOf('.') > -1 ? entryToRename.name.substring(entryToRename.name.lastIndexOf('.')) : '';
+
+                    // const newNameWithoutExtension = prompt(`Enter new name for "${currentNameWithoutExtension}":`, currentNameWithoutExtension);
+                    const newNameWithoutExtension = await showCustomPrompt(
+                        'Rename Image',
+                        `Enter new name for "${currentNameWithoutExtension}":`,
+                        currentNameWithoutExtension
+                    );
+
+
+                    if (newNameWithoutExtension && newNameWithoutExtension.trim() !== '' && newNameWithoutExtension.trim() !== currentNameWithoutExtension) {
+                        const newFullName = newNameWithoutExtension.trim() + currentExtension;
+                        try {
+                            const originalName = entryToRename.name; // Store for potential revert
+                            imageEntries[targetIndex].name = newFullName;
+                            
+                            const transaction = db.transaction([IMAGE_STORE_NAME], 'readwrite');
+                            const store = transaction.objectStore(IMAGE_STORE_NAME);
+                            const entryWithNewName = { ...imageEntries[targetIndex] }; // Already updated in memory
+                            
+                            await new Promise((resolve, reject) => {
+                                const request = store.put(entryWithNewName);
+                                request.onsuccess = resolve;
+                                request.onerror = () => reject(request.error);
+                            });
+
+                            displayImages();
+                            if (imageModal.classList.contains('show') && currentImageIndex === targetIndex) {
+                                modalInfo.innerHTML = `${newFullName} (${entryToRename.size})`;
+                                if (Array.isArray(entryToRename.tags) && entryToRename.tags.length > 0) {
+                                    modalInfo.innerHTML += `<div style="margin-top: 8px; font-size: 12px; color: #909090;">Tags: ${entryToRename.tags.join(', ')}</div>`;
+                                }
+                            }
+                            showStatus(`Renamed to "${newFullName}"`, 'success');
+                        } catch (error) {
+                            console.error('Error renaming image:', error);
+                            showStatus(`Failed to rename: ${error.message}`, 'error');
+                            imageEntries[targetIndex].name = originalName; // Revert
+                            displayImages(); // Refresh to show reverted name
+                        }
+                    } else if (newNameWithoutExtension === null) {
+                        showStatus('Rename cancelled.', 'info');
+                    } else {
+                        showStatus('No change made to the name.', 'info');
                     }
                 }
                 break;
@@ -4814,7 +5146,12 @@
             return;
         }
 
-        const downloadAsPNG = confirm("Download as PNG? (Cancel for original format)");
+        // const downloadAsPNG = confirm("Download as PNG? (Cancel for original format)");
+        const downloadAsPNG = await showCustomConfirm(
+            'Download Format',
+            'Download as PNG? (Cancel for original format)'
+        );
+
 
         if (downloadAsPNG) {
             const toastId = showStatus('Preparing PNG download...', 'info', { persistent: true, showSpinner: true });
@@ -4946,6 +5283,115 @@
         }
         return new Blob([u8arr], {type:mime});
     }
+
+    // --- Custom Modal Functions --- Start
+    function showCustomPrompt(title, message, defaultValue = '') {
+        return new Promise((resolve) => {
+            // promptResolve = resolve; // Store the resolve function - No longer storing globally for this modal's specific instance
+
+            customPromptTitle.textContent = title;
+            customPromptMessage.textContent = message;
+            customPromptInput.value = defaultValue;
+
+            customPromptModal.classList.add('show');
+            customPromptInput.focus();
+            customPromptInput.select(); // Select the default text
+
+            const handleEnterKey = (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    customPromptOK.click(); // Simulate OK click
+                }
+            };
+
+            const cleanupAndResolve = (value) => {
+                customPromptInput.removeEventListener('keydown', handleEnterKey);
+                customPromptModal.classList.remove('show');
+                resolve(value); // Use the promise's resolve directly
+            };
+
+            customPromptInput.addEventListener('keydown', handleEnterKey);
+
+            customPromptOK.onclick = () => {
+                cleanupAndResolve(customPromptInput.value);
+            };
+
+            customPromptCancel.onclick = () => {
+                cleanupAndResolve(null); // Resolve with null on cancel
+            };
+            
+            // Store a reference to this specific cancel handler for the global Escape key
+            customPromptModal.currentCancelHandler = customPromptCancel.onclick;
+        });
+    }
+
+    function showCustomConfirm(title, message) {
+        return new Promise((resolve) => {
+            // confirmResolve = resolve; // No longer storing globally
+
+            customConfirmTitle.textContent = title;
+            customConfirmMessage.textContent = message;
+
+            customConfirmModal.classList.add('show');
+
+            const cleanupAndResolve = (value) => {
+                customConfirmModal.classList.remove('show');
+                resolve(value);
+            };
+
+            customConfirmOK.onclick = () => {
+                cleanupAndResolve(true);
+            };
+
+            customConfirmCancel.onclick = () => {
+                cleanupAndResolve(false);
+            };
+            
+            // Store a reference for the global Escape key
+            customConfirmModal.currentCancelHandler = customConfirmCancel.onclick;
+        });
+    }
+    // --- Custom Modal Functions --- End
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            if (isSelectModeActive) {
+                exitSelectMode();
+            }
+            // Close custom modals if they are shown by calling their specific cancel handler
+            if (customPromptModal && customPromptModal.classList.contains('show') && typeof customPromptModal.currentCancelHandler === 'function') {
+                customPromptModal.currentCancelHandler();
+                customPromptModal.currentCancelHandler = null; // Clear handler after use
+            }
+            if (customConfirmModal && customConfirmModal.classList.contains('show') && typeof customConfirmModal.currentCancelHandler === 'function') {
+                customConfirmModal.currentCancelHandler();
+                customConfirmModal.currentCancelHandler = null; // Clear handler after use
+            }
+        }
+    });
+
+    // Click outside modal to close
+    imageModal.addEventListener('click', (e) => {
+        // Add a small delay to prevent immediate closure from the opening click/touch
+        setTimeout(() => {
+            // Check if the modal is still supposed to be shown
+            // (prevents closing if the user already initiated closing via another method)
+            if (!imageModal.classList.contains('show')) {
+                return; 
+            }
+
+            // --- DEBUG LOGGING START ---
+            console.log('[Modal Backdrop Click Check (Delayed)] Event target:', e.target);
+            console.log('[Modal Backdrop Click Check (Delayed)] Is e.target === imageModal?', e.target === imageModal);
+            // --- DEBUG LOGGING END ---
+
+            // Now perform the original check
+            if (e.target === imageModal) {
+                console.log('[Modal Backdrop Click Check (Delayed)] Closing modal due to backdrop click.'); // DEBUG
+                closeModal();
+            }
+        }, 50); // Delay check by 50ms
+    });
 
     </script>
 </body>
