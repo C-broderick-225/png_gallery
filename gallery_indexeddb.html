@@ -594,6 +594,21 @@
             background: rgba(76, 175, 80, 0.7) !important;
         }
 
+        .menu-count-badge {
+            background-color: rgba(76, 175, 80, 0.7); /* Consistent green */
+            color: white;
+            padding: 2px 7px;
+            font-size: 11px;
+            border-radius: 10px; /* Pill shape */
+            margin-left: 8px;
+            font-weight: 500;
+            display: inline-block;
+            vertical-align: middle;
+            line-height: 1;
+            min-width: 18px; /* Ensure consistent width for single digit */
+            text-align: center;
+        }
+
         /* Size control styles */
         .size-control {
             background: rgba(66, 66, 66, 0.6);
@@ -1584,8 +1599,8 @@
                 <button id="menuAddFilesBtn"><i class="fas fa-plus"></i>Add Files</button>
                 <button id="menuClearGalleryBtn"><i class="fas fa-trash"></i>Clear Gallery</button>
                 <button id="menuReloadBtn"><i class="fas fa-sync"></i>Reload</button>
-                <button id="menuTagSelectedBtn" style="display: none;"><i class="fas fa-tags"></i>Tag Selected (<span id="menuSelectionCount">0</span>)</button> <!-- Added for Menu -->
-                <button id="menuDownloadSelectedBtn" style="display: none;"><i class="fas fa-download"></i>Download Selected (<span id="menuSelectionCountDL">0</span>)</button> <!-- Added for Menu -->
+                <button id="menuTagSelectedBtn" style="display: none;"><i class="fas fa-tags"></i>Tag Selected <span id="menuSelectionCount" class="menu-count-badge">0</span></button> <!-- Added for Menu -->
+                <button id="menuDownloadSelectedBtn" style="display: none;"><i class="fas fa-download"></i>Download Selected <span id="menuSelectionCountDL" class="menu-count-badge">0</span></button> <!-- Added for Menu -->
             </div>
         </div>
 
@@ -2727,14 +2742,9 @@
     }
 
     // Download current image
-    function downloadCurrentImage() {
+    async function downloadCurrentImage() { // Made async
         const entry = imageEntries[currentImageIndex];
-        const link = document.createElement('a');
-        link.href = entry.base64Data;
-        link.download = entry.name;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        await promptAndDownloadImage(entry); // Call the new helper
     }
 
     // Delete current image
@@ -3869,12 +3879,21 @@
     }
 
     // --- Download Selected Images Function --- Start
-    function downloadSelectedImages() {
+    async function downloadSelectedImages() { // Made async
         if (selectedIndices.length === 0) {
             showStatus('No images selected to download.', 'info');
             return;
         }
 
+        // If only one image is selected, download it directly after prompting
+        if (selectedIndices.length === 1) {
+            const singleIndex = selectedIndices[0];
+            const entryToDownload = imageEntries[singleIndex];
+            await promptAndDownloadImage(entryToDownload); // Call the new helper
+            return; // Exit function after single download
+        }
+
+        // Proceed with zipping for multiple files
         const indicesToDownload = [...selectedIndices]; // Copy selected indices
         const total = indicesToDownload.length;
         const toastId = showStatus(`Preparing to download ${total} image(s) as a ZIP...`, 'info', { persistent: true, showSpinner: true });
@@ -3887,17 +3906,51 @@
 
         const zip = new JSZip();
         let filesAdded = 0;
+        let currentFileNum = 0; // To update toast
 
-        // Helper function to convert data URL to Blob
-        function dataURLtoBlob(dataurl) {
-            let arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
-                bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
-            while(n--){
-                u8arr[n] = bstr.charCodeAt(n);
+        // Helper function to convert data URL to Blob is already in global scope
+
+        // Process each selected file for zipping
+        for (const index of indicesToDownload) { // Changed to for...of for async/await
+            currentFileNum++;
+            const entry = imageEntries[index];
+            
+            showStatus(`Processing file ${currentFileNum}/${total} for ZIP: ${entry.name}`, 'info', { id: toastId, persistent: true, showSpinner: true });
+
+            if (!entry || !entry.base64Data || !entry.name) {
+                console.error(`Skipping download for index ${index}: Missing data.`);
+                showStatus(`Skipping one image: Missing data. (${currentFileNum}/${total})`, 'error'); // Update toast for skip
+                continue; // Skip this one
             }
-            return new Blob([u8arr], {type:mime});
-        }
 
+            try {
+                let metadataToWrite = {};
+                if (entry.tags && Array.isArray(entry.tags) && entry.tags.length > 0) {
+                    metadataToWrite.Keywords = entry.tags.join(',');
+                }
+
+                const originalBlob = dataURLtoBlob(entry.base64Data);
+                let blobForProcessing = originalBlob;
+                let pngFileName = entry.name.replace(/\.[^/.]+$/, '') + '.png';
+
+                if (entry.type !== 'image/png') {
+                    console.log(`Converting ${entry.name} to PNG for ZIP...`);
+                    // convertToPNG expects a File, so create one from the blob
+                    const originalFile = new File([originalBlob], entry.name, { type: entry.type });
+                    blobForProcessing = await convertToPNG(originalFile); // This returns a Blob (File is a Blob)
+                }
+
+                console.log(`Writing metadata for ${pngFileName} for ZIP...`, metadataToWrite);
+                const finalBlobWithMetadata = await pngMetadata.writeMetadata(blobForProcessing, metadataToWrite);
+
+                zip.file(pngFileName, finalBlobWithMetadata);
+                filesAdded++;
+            } catch (error) {
+                console.error(`Error processing image ${entry.name} for zipping:`, error);
+                showStatus(`Error processing ${entry.name} for ZIP: ${error.message}`, 'error');
+            }
+        }
+        /* // Old forEach loop, replaced by for...of for async/await
         indicesToDownload.forEach((index, i) => {
             const entry = imageEntries[index];
             if (!entry || !entry.base64Data || !entry.name) {
@@ -3915,6 +3968,7 @@
                 showStatus(`Error adding ${entry.name} to ZIP: ${error.message}`, 'error');
             }
         });
+        */
 
         if (filesAdded === 0) {
             showStatus('No files could be added to the ZIP archive.', 'error', { id: toastId, persistent: false, showSpinner: false });
@@ -4519,22 +4573,7 @@
                 // Index already validated above
                 // Directly download the target image
                 const entryToDownload = imageEntries[targetIndex];
-                if (entryToDownload && entryToDownload.base64Data && entryToDownload.name) {
-                    try {
-                        const link = document.createElement('a');
-                        link.href = entryToDownload.base64Data;
-                        link.download = entryToDownload.name;
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                        console.log(`Download triggered for: ${entryToDownload.name}`);
-                    } catch (error) {
-                        console.error(`Error triggering download for ${entryToDownload.name}:`, error);
-                        showStatus(`Error downloading ${entryToDownload.name}: ${error.message}`, 'error');
-                    }
-                } else {
-                    showStatus('Cannot download: Image data missing.', 'error');
-                }
+                await promptAndDownloadImage(entryToDownload); // Call the helper
                 break;
             case 'delete':
                 // Index already validated above
@@ -4768,6 +4807,76 @@
     }
     // --- Fullscreen API Logic --- End
 
+    async function promptAndDownloadImage(entry) {
+        if (!entry || !entry.base64Data || !entry.name) {
+            showStatus('Cannot download: Image data missing.', 'error');
+            console.error('promptAndDownloadImage called with invalid entry:', entry);
+            return;
+        }
+
+        const downloadAsPNG = confirm("Download as PNG? (Cancel for original format)");
+
+        if (downloadAsPNG) {
+            const toastId = showStatus('Preparing PNG download...', 'info', { persistent: true, showSpinner: true });
+            let fileToDownload;
+            let fileName = entry.name.replace(/\.[^/.]+$/, '') + '.png'; // Ensure .png extension
+            let metadataToWrite = {}; // Initialize metadata object
+
+            // Prepare tags for metadata if they exist
+            if (entry.tags && Array.isArray(entry.tags) && entry.tags.length > 0) {
+                metadataToWrite.Keywords = entry.tags.join(',');
+                console.log('Preparing to write tags to PNG metadata:', metadataToWrite.Keywords);
+            }
+
+            try {
+                const originalBlob = dataURLtoBlob(entry.base64Data); // Use existing helper
+                let blobForMetadataWriting;
+
+                if (entry.type === 'image/png') {
+                    blobForMetadataWriting = originalBlob; // Already PNG
+                    console.log('Original is PNG, using as is for metadata.');
+                } else {
+                    console.log('Original is not PNG, converting before adding metadata...');
+                    const originalFile = new File([originalBlob], entry.name, { type: entry.type });
+                    blobForMetadataWriting = await convertToPNG(originalFile); // convertToPNG returns a File (which is a Blob)
+                    console.log('Conversion to PNG successful for metadata writing.');
+                }
+
+                // Write metadata (including tags if any) to the (potentially converted) PNG blob
+                console.log('Writing metadata to PNG:', metadataToWrite);
+                fileToDownload = await pngMetadata.writeMetadata(blobForMetadataWriting, metadataToWrite);
+                
+                // Download the blob with metadata
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(fileToDownload);
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(link.href);
+                showStatus(`Successfully downloaded ${fileName}`, 'success', { id: toastId, persistent: false, showSpinner: false });
+            } catch (error) {
+                console.error('Error during PNG download process:', error);
+                showStatus(`Failed to prepare/download PNG: ${error.message}`, 'error', { id: toastId, persistent: false, showSpinner: false });
+                return;
+            }
+
+        } else { // Download in original format
+            try {
+                const link = document.createElement('a');
+                link.href = entry.base64Data;
+                link.download = entry.name;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                showStatus(`Successfully downloaded ${entry.name}`, 'success');
+            } catch (error) {
+                console.error('Error downloading original format:', error);
+                showStatus(`Failed to download original: ${error.message}`, 'error');
+            }
+        }
+    }
+
     // Pan/Zoom state variables for pinch-zoom and pan // REMOVE THIS BLOCK START
     // let panX = 0, panY = 0; 
     // let currentScale = 1.0; 
@@ -4827,6 +4936,16 @@
     //         isPinching = false;
     //     }
     // }); // REMOVE THIS BLOCK END
+
+    // Helper function to convert data URL to Blob (Moved to a higher scope)
+    function dataURLtoBlob(dataurl) {
+        let arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
+            bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
+        while(n--){
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        return new Blob([u8arr], {type:mime});
+    }
 
     </script>
 </body>
