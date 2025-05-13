@@ -1712,6 +1712,32 @@
                 font-size: 18px;
             }
         }
+
+        /* Custom Choice Modal (New) */
+        #customChoiceModal .custom-modal-actions {
+            justify-content: center; /* Center buttons */
+            flex-wrap: wrap; /* Allow buttons to wrap */
+            gap: 10px; /* Keep existing gap */
+        }
+        /* End Custom Choice Modal */
+
+        /* Mobile-specific styling */
+        @media (max-width: 768px) {
+            .custom-context-menu {
+                min-width: 200px; /* Wider on mobile */
+                max-width: 80%; /* Limit width on small screens */
+            }
+            
+            .custom-context-menu li {
+                padding: 16px; /* Even larger touch targets on mobile */
+                font-size: 16px; /* Larger text */
+            }
+            
+            .custom-context-menu li i {
+                width: 20px; /* Larger icons */
+                font-size: 18px;
+            }
+        }
     </style>
 
     <!-- Allow panning when zoomed in -->
@@ -1818,6 +1844,15 @@
             </button>
             <button class="modal-btn" id="editMetadataBtn">
                 <i class="fas fa-edit"></i>Edit Metadata
+            </button>
+            <button class="modal-btn" id="renameImageBtn">
+                <i class="fas fa-i-cursor"></i>Rename
+            </button>
+            <button class="modal-btn" id="rotateLeftBtn">
+                <i class="fas fa-undo"></i>Rotate Left
+            </button>
+            <button class="modal-btn" id="rotateRightBtn">
+                <i class="fas fa-redo"></i>Rotate Right
             </button>
             <button class="modal-btn" id="downloadImageBtn">
                 <i class="fas fa-download"></i>Download
@@ -1966,6 +2001,21 @@
             <div class="custom-modal-actions">
                 <button id="customConfirmCancel">Cancel</button>
                 <button id="customConfirmOK" class="primary">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Choice Modal (New) -->
+    <div id="customChoiceModal" class="custom-modal-overlay">
+        <div class="custom-modal-content">
+            <div class="custom-modal-header">
+                <h3 id="customChoiceTitle">Choose an Option</h3>
+            </div>
+            <div class="custom-modal-body">
+                <p id="customChoiceMessage">Please select an option:</p>
+            </div>
+            <div id="customChoiceActions" class="custom-modal-actions">
+                <!-- Buttons will be added dynamically here -->
             </div>
         </div>
     </div>
@@ -2126,6 +2176,10 @@
     let confirmResolve = null;
     // --- Custom Prompt/Confirm Modal Elements & References --- End
 
+    // --- Custom Choice Modal Elements & References --- Start
+    let customChoiceModal, customChoiceTitle, customChoiceMessage, customChoiceActions;
+    // --- Custom Choice Modal Elements & References --- End
+
     // --- Custom Context Menu Elements & State --- Start
     let customContextMenu = null;
     let contextMenuTargetIndex = -1;
@@ -2189,6 +2243,13 @@
     const closeModalBtn = document.getElementById('closeModalBtn');
     const downloadImageBtn = document.getElementById('downloadImageBtn');
     const deleteImageBtn = document.getElementById('deleteImageBtn');
+
+    // Add Rename button to modal elements
+    const renameImageBtn = document.getElementById('renameImageBtn');
+
+    // Add Rotate buttons to modal elements
+    const rotateLeftBtn = document.getElementById('rotateLeftBtn');
+    const rotateRightBtn = document.getElementById('rotateRightBtn');
 
     // Add PNG Editor functionality
     let currentEditorFile = null;
@@ -2307,6 +2368,13 @@
             customConfirmCancel = document.getElementById('customConfirmCancel');
             // --- Initialize Custom Prompt/Confirm Modal Elements --- End
 
+            // --- Initialize Custom Choice Modal Elements --- Start
+            customChoiceModal = document.getElementById('customChoiceModal');
+            customChoiceTitle = document.getElementById('customChoiceTitle');
+            customChoiceMessage = document.getElementById('customChoiceMessage');
+            customChoiceActions = document.getElementById('customChoiceActions');
+            // --- Initialize Custom Choice Modal Elements --- End
+
             await loadImagesFromDB();
             setupEventListeners(); // Existing listeners
             setupBulkTagListeners(); // Add bulk tag listeners
@@ -2420,7 +2488,8 @@
                                         type: file.type,
                                         timestamp: new Date().toISOString(),
                                         base64Data: reader.result,
-                                        tags: extractedTags // Use extracted or empty tags
+                                        tags: extractedTags, // Use extracted or empty tags
+                                        rotationAngle: 0 // Initialize rotation angle
                                     };
 
                                     const transaction = db.transaction([IMAGE_STORE_NAME], 'readwrite');
@@ -2580,6 +2649,10 @@
                         // Ensure tags array exists (backward compatibility & future proofing)
                         if (!Array.isArray(entry.tags)) {
                             entry.tags = [];
+                        }
+                        // Ensure rotationAngle exists and defaults to 0 (backward compatibility)
+                        if (typeof entry.rotationAngle === 'undefined') {
+                            entry.rotationAngle = 0;
                         }
                         
                         imageEntries.push(entry);
@@ -2805,6 +2878,12 @@
             thumbnail.classList.add('selected');
         }
 
+        // Apply rotation to the thumbnail image if necessary
+        const thumbnailImg = thumbnail.querySelector('.thumbnail-img');
+        if (entry.rotationAngle && entry.rotationAngle !== 0) {
+            thumbnailImg.style.transform = `rotate(${entry.rotationAngle}deg)`;
+        }
+
         return thumbnail;
     }
 
@@ -2902,18 +2981,14 @@
         
         modalInfo.innerHTML = infoText;
         
-        // Reset transform before showing (handled by setupImageZoom)
-        // modalImage.classList.remove('zoomed-fit'); // No longer using classes
-        // modalImage.classList.remove('zoomed-full');
-        // modalImage.style.transform = ''; // Reset inline style
-
         imageModal.style.display = 'block';
         setTimeout(() => imageModal.classList.add('show'), 10);
 
         updateNavigationButtons();
 
         // Initialize/reset zoom functionality each time an image is shown
-        setupImageZoom(); // This now includes resetting state
+        // This will also apply the initial rotation
+        setupImageZoom(); 
     }
 
     // Update navigation buttons state
@@ -3412,6 +3487,73 @@
         closeModalBtn.addEventListener('click', closeModal);
         downloadImageBtn.addEventListener('click', downloadCurrentImage);
         deleteImageBtn.addEventListener('click', deleteCurrentImage);
+
+        // Add event listener for the new Rename button in the modal
+        if (renameImageBtn) {
+            renameImageBtn.addEventListener('click', async () => {
+                if (currentImageIndex < 0 || currentImageIndex >= imageEntries.length) {
+                    showStatus('No image selected to rename.', 'error');
+                    return;
+                }
+
+                const entryToRename = imageEntries[currentImageIndex];
+                const currentNameWithoutExtension = entryToRename.name.substring(0, entryToRename.name.lastIndexOf('.') > -1 ? entryToRename.name.lastIndexOf('.') : entryToRename.name.length);
+                const currentExtension = entryToRename.name.lastIndexOf('.') > -1 ? entryToRename.name.substring(entryToRename.name.lastIndexOf('.')) : '';
+
+                const newNameWithoutExtension = await showCustomPrompt(
+                    'Rename Image',
+                    `Enter new name for "${currentNameWithoutExtension}":`,
+                    currentNameWithoutExtension
+                );
+
+                if (newNameWithoutExtension && newNameWithoutExtension.trim() !== '' && newNameWithoutExtension.trim() !== currentNameWithoutExtension) {
+                    const newFullName = newNameWithoutExtension.trim() + currentExtension;
+                    try {
+                        const originalName = entryToRename.name; // Store for potential revert
+                        imageEntries[currentImageIndex].name = newFullName;
+                        
+                        const transaction = db.transaction([IMAGE_STORE_NAME], 'readwrite');
+                        const store = transaction.objectStore(IMAGE_STORE_NAME);
+                        // Create a new object for IndexedDB to ensure it picks up changes if entryToRename is a complex object
+                        const entryWithNewName = { ...imageEntries[currentImageIndex] }; 
+                        
+                        await new Promise((resolve, reject) => {
+                            const request = store.put(entryWithNewName);
+                            request.onsuccess = resolve;
+                            request.onerror = () => reject(request.error);
+                        });
+
+                        // Update modal info directly
+                        let infoText = `${newFullName} (${entryToRename.size})`;
+                        if (Array.isArray(entryToRename.tags) && entryToRename.tags.length > 0) {
+                            infoText += `<div style="margin-top: 8px; font-size: 12px; color: #909090;">Tags: ${entryToRename.tags.join(', ')}</div>`;
+                        }
+                        modalInfo.innerHTML = infoText;
+                        
+                        displayImages(); // Refresh gallery view
+                        showStatus(`Renamed to "${newFullName}"`, 'success');
+                    } catch (error) {
+                        console.error('Error renaming image:', error);
+                        showStatus(`Failed to rename: ${error.message}`, 'error');
+                        imageEntries[currentImageIndex].name = originalName; // Revert in-memory name
+                        // No need to re-update modalInfo here as it should reflect the reverted name on next view or if error is critical
+                        displayImages(); // Refresh to show reverted name
+                    }
+                } else if (newNameWithoutExtension === null) {
+                    showStatus('Rename cancelled.', 'info');
+                } else if (newNameWithoutExtension !== null) { // Only show if not cancelled
+                    showStatus('No change made to the name.', 'info');
+                }
+            });
+        }
+
+        // Add event listeners for Rotate buttons in the modal
+        if (rotateLeftBtn) {
+            rotateLeftBtn.addEventListener('click', () => rotateImageInModal(-90));
+        }
+        if (rotateRightBtn) {
+            rotateRightBtn.addEventListener('click', () => rotateImageInModal(90));
+        }
 
         // Keyboard navigation
         document.addEventListener('keydown', (e) => {
@@ -4480,7 +4622,7 @@
 
 
         // --- Reset zoom state ---
-        function resetZoomState() {
+        function resetZoomState(rotationAngle) {
             currentScale = 1.0;
             currentTx = 0;
             currentTy = 0;
@@ -4490,6 +4632,7 @@
 
             modalImage.style.transition = 'none'; // Apply reset directly
             applyFinalZoomTransform(true); // Resets origin to center, tx/ty to 0, scale to 1, and sets correct cursor
+            modalImage.style.transform = `rotate(${rotationAngle}deg)`; // Apply rotation
         }
 
         // --- Tap/Double-Tap Handlers ---
@@ -4662,7 +4805,8 @@
         modalImage.addEventListener('touchcancel', onTouchEnd); // Handle touchcancel like touchend
 
         // Reset state when the modal is opened initially (or this function is called)
-        resetZoomState(); 
+        // This will now also apply the current image's rotationAngle
+        resetZoomState(imageEntries[currentImageIndex]?.rotationAngle || 0);
     }
 
     // --- Custom Context Menu Logic --- Start
@@ -5146,133 +5290,246 @@
             return;
         }
 
-        // const downloadAsPNG = confirm("Download as PNG? (Cancel for original format)");
-        const downloadAsPNG = await showCustomConfirm(
-            'Download Format',
-            'Download as PNG? (Cancel for original format)'
+        // const downloadAsPNG = await showCustomConfirm(
+        //     'Download Format',
+        //     'Download as PNG? (Cancel for original format)'
+        // );
+
+        const choices = [
+            { text: 'PNG', value: 'png', type: 'primary' }, // 'primary' for distinct styling
+            { text: 'Original', value: 'original' },
+            { text: 'Cancel', value: 'cancel' } // Standard cancel value
+        ];
+        const userChoice = await showCustomChoiceModal(
+            'Download Options',
+            `Choose format to download "${entry.name}":`,
+            choices
         );
 
+        if (userChoice === 'cancel' || userChoice === null) {
+            showStatus('Download cancelled.', 'info');
+            return;
+        }
 
-        if (downloadAsPNG) {
-            const toastId = showStatus('Preparing PNG download...', 'info', { persistent: true, showSpinner: true });
-            let fileToDownload;
-            let fileName = entry.name.replace(/\.[^/.]+$/, '') + '.png'; // Ensure .png extension
-            let metadataToWrite = {}; // Initialize metadata object
+        const toastId = showStatus('Preparing download...', 'info', { persistent: true, showSpinner: true });
 
-            // Prepare tags for metadata if they exist
-            if (entry.tags && Array.isArray(entry.tags) && entry.tags.length > 0) {
-                metadataToWrite.Keywords = entry.tags.join(',');
-                console.log('Preparing to write tags to PNG metadata:', metadataToWrite.Keywords);
+        try {
+            // Determine targetFormat based on userChoice
+            let targetFormat = null;
+            if (userChoice === 'png') {
+                targetFormat = 'image/png';
+            } else if (userChoice === 'original') {
+                targetFormat = entry.type; // Use the original type of the image
             }
+            // If targetFormat remains null after this (e.g. entry.type was undefined, though unlikely for an image)
+            // getProcessedImageBlob might default to PNG if rotation occurs. This behavior is acceptable.
 
-            try {
-                const originalBlob = dataURLtoBlob(entry.base64Data); // Use existing helper
-                let blobForMetadataWriting;
 
-                if (entry.type === 'image/png') {
-                    blobForMetadataWriting = originalBlob; // Already PNG
-                    console.log('Original is PNG, using as is for metadata.');
-                } else {
-                    console.log('Original is not PNG, converting before adding metadata...');
-                    const originalFile = new File([originalBlob], entry.name, { type: entry.type });
-                    blobForMetadataWriting = await convertToPNG(originalFile); // convertToPNG returns a File (which is a Blob)
-                    console.log('Conversion to PNG successful for metadata writing.');
+            const { blob: processedBlob, fileName: finalFileName } = await getProcessedImageBlob(entry, targetFormat);
+            
+            let blobToDownload = processedBlob;
+            let downloadName = finalFileName;
+
+            // If user chose PNG, ensure metadata is written.
+            // getProcessedImageBlob will already return a PNG blob if targetFormat was 'image/png'
+            // or if rotation occurred and targetFormat was null.
+            if (userChoice === 'png') {
+                showStatus('Writing metadata to PNG...', 'info', { id: toastId, persistent: true, showSpinner: true });
+                let metadataToWrite = {};
+                if (entry.tags && Array.isArray(entry.tags) && entry.tags.length > 0) {
+                    metadataToWrite.Keywords = entry.tags.join(',');
                 }
+                // Add other metadata fields from entry if they exist
+                if (entry.title) metadataToWrite.Title = entry.title;
+                if (entry.author) metadataToWrite.Author = entry.author;
+                if (entry.description) metadataToWrite.Description = entry.description;
+                // etc.
 
-                // Write metadata (including tags if any) to the (potentially converted) PNG blob
-                console.log('Writing metadata to PNG:', metadataToWrite);
-                fileToDownload = await pngMetadata.writeMetadata(blobForMetadataWriting, metadataToWrite);
-                
-                // Download the blob with metadata
-                const link = document.createElement('a');
-                link.href = URL.createObjectURL(fileToDownload);
-                link.download = fileName;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                URL.revokeObjectURL(link.href);
-                showStatus(`Successfully downloaded ${fileName}`, 'success', { id: toastId, persistent: false, showSpinner: false });
-            } catch (error) {
-                console.error('Error during PNG download process:', error);
-                showStatus(`Failed to prepare/download PNG: ${error.message}`, 'error', { id: toastId, persistent: false, showSpinner: false });
-                return;
+                blobToDownload = await pngMetadata.writeMetadata(processedBlob, metadataToWrite);
+                // Ensure the filename reflects PNG if it wasn't already (e.g., original was JPG but downloaded as PNG)
+                if (!downloadName.toLowerCase().endsWith('.png')) {
+                    downloadName = downloadName.substring(0, downloadName.lastIndexOf('.') > -1 ? downloadName.lastIndexOf('.') : downloadName.length) + '.png';
+                }
             }
+            // If 'original' was chosen, and rotation occurred, getProcessedImageBlob might have converted to PNG.
+            // In this scenario, we don't re-write metadata unless it's explicitly a PNG download request.
+            // The user gets the rotated image, possibly as PNG if original was not PNG.
 
-        } else { // Download in original format
-            try {
-                const link = document.createElement('a');
-                link.href = entry.base64Data;
-                link.download = entry.name;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                showStatus(`Successfully downloaded ${entry.name}`, 'success');
-            } catch (error) {
-                console.error('Error downloading original format:', error);
-                showStatus(`Failed to download original: ${error.message}`, 'error');
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blobToDownload);
+            link.download = downloadName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+            showStatus(`Successfully downloaded ${downloadName}`, 'success', { id: toastId, persistent: false, showSpinner: false });
+
+        } catch (error) {
+            console.error('Error during download process:', error);
+            showStatus(`Download failed: ${error.message}`, 'error', { id: toastId, persistent: false, showSpinner: false });
+        }
+    }
+
+    // --- Image Rotation in Modal --- Start
+    async function rotateImageInModal(degrees) {
+        if (currentImageIndex < 0 || currentImageIndex >= imageEntries.length) return;
+
+        const entry = imageEntries[currentImageIndex];
+        entry.rotationAngle = (entry.rotationAngle + degrees + 360) % 360; // Normalize to 0-359
+
+        resetZoomState(); // It will pick up entry.rotationAngle via applyFinalZoomTransform
+
+        // Save the updated entry to IndexedDB
+        try {
+            const transaction = db.transaction([IMAGE_STORE_NAME], 'readwrite');
+            const store = transaction.objectStore(IMAGE_STORE_NAME);
+            const request = store.put(entry);
+            await new Promise((resolve, reject) => {
+                request.onsuccess = resolve;
+                request.onerror = reject;
+            });
+            console.log(`Rotation ${entry.rotationAngle} saved for ${entry.name}`);
+            showStatus(`Image rotated. New orientation will be saved on download.`, 'info');
+            displayImages(); // Refresh the gallery to show rotated thumbnail
+        } catch (error) {
+            console.error('Failed to save rotation to DB:', error);
+            showStatus('Failed to save rotation.', 'error');
+            // Optionally revert in-memory rotation if DB save fails
+            entry.rotationAngle = (entry.rotationAngle - degrees + 360) % 360;
+            resetZoomState(); // Revert visual rotation in modal
+            displayImages(); // Refresh gallery to show reverted thumbnail rotation
+        }
+    }
+    // --- Image Rotation in Modal --- End
+
+    // --- Moved resetZoomState and applyFinalZoomTransform to global scope --- Start
+    function applyFinalZoomTransform(resetOrigin = true) {
+        currentScale = Math.max(1.0, currentScale); 
+
+        if (resetOrigin) { 
+            currentTx = 0;
+            currentTy = 0;
+            modalImage.style.transformOrigin = 'center center';
+        }
+        
+        if (Math.abs(currentScale - 1.0) < 0.01) {
+            currentTx = 0;
+            currentTy = 0;
+            if (resetOrigin || modalImage.style.transformOrigin !== 'center center') {
+                modalImage.style.transformOrigin = 'center center';
+            }
+        }
+
+        // Get current rotation for the image
+        const currentRotation = imageEntries[currentImageIndex]?.rotationAngle || 0;
+
+        modalImage.style.transition = 'transform 0.2s ease-out';
+        // Apply transformations in order: translate, scale, then rotate
+        modalImage.style.transform = `translate(${currentTx}px, ${currentTy}px) scale(${currentScale}) rotate(${currentRotation}deg)`;
+
+        if (!isPinching && !isPanning) {
+            if (currentScale > 1.01) {
+                modalImage.style.cursor = 'grab'; 
+                modalImage.classList.add('is-zoomed');
+            } else {
+                modalImage.style.cursor = 'zoom-in';
+                modalImage.classList.remove('is-zoomed');
             }
         }
     }
 
-    // Pan/Zoom state variables for pinch-zoom and pan // REMOVE THIS BLOCK START
-    // let panX = 0, panY = 0; 
-    // let currentScale = 1.0; 
-    // let pinchStartMidpoint = {x: 0, y: 0};
-    // let pinchStartPan = {x: 0, y: 0}; 
-    // let pinchStartScale = 1.0; 
-    // let pinchStartDistance = 0; 
-    // let isPinching = false; 
+    function resetZoomState(rotationAngle = 0) { // Default rotation to 0 if not provided
+        currentScale = 1.0;
+        currentTx = 0;
+        currentTy = 0;
+        isPinching = false;
+        isPanning = false; 
+        pinchStartDistance = 0;
 
-    // function getMidpoint(touches) { 
-    //     const t1 = touches[0], t2 = touches[1];
-    //     return {
-    //         x: (t1.clientX + t2.clientX) / 2,
-    //         y: (t1.clientY + t2.clientY) / 2
-    //     };
-    // }
-    // function getDistance(touches) { 
-    //     const t1 = touches[0], t2 = touches[1];
-    //     return Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
-    // }
+        modalImage.style.transition = 'none'; 
+        // applyFinalZoomTransform will now fetch the rotation from the global entry
+        applyFinalZoomTransform(true); 
+        // The direct rotation set here before is now handled by applyFinalZoomTransform
+    }
+    // --- Moved resetZoomState and applyFinalZoomTransform to global scope --- End
 
-    // modalImage.addEventListener('touchstart', function(e) { 
-    //     if (e.touches.length === 2) {
-    //         isPinching = true;
-    //         pinchStartScale = currentScale;
-    //         pinchStartPan = {x: panX, y: panY};
-    //         pinchStartMidpoint = getMidpoint(e.touches);
-    //         pinchStartDistance = getDistance(e.touches);
-    //     }
-    // }, { passive: false });
+    // --- Image Processing for Download --- Start
+    async function getProcessedImageBlob(entry, targetFormat = null) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = async () => {
+                let canvas = document.createElement('canvas');
+                let ctx = canvas.getContext('2d');
+                let outputBlob;
+                let outputFileName = entry.name;
+                const currentRotation = entry.rotationAngle || 0;
 
-    // modalImage.addEventListener('touchmove', function(e) {
-    //     if (isPinching && e.touches.length === 2) {
-    //         e.preventDefault();
-    //         const newDistance = getDistance(e.touches);
-    //         currentScale = pinchStartScale * (newDistance / pinchStartDistance);
+                // Determine final format and extension
+                let finalMimeType = targetFormat || entry.type;
+                if (currentRotation !== 0 && finalMimeType !== 'image/png') {
+                    // If rotated, and target isn't already PNG, default to PNG to preserve quality
+                    // unless a specific targetFormat (like 'image/jpeg') was explicitly requested for the rotated image.
+                    if (!targetFormat) finalMimeType = 'image/png';
+                }
+                const fileExtension = finalMimeType.split('/')[1] || 'png';
+                const baseName = entry.name.substring(0, entry.name.lastIndexOf('.') > -1 ? entry.name.lastIndexOf('.') : entry.name.length);
+                outputFileName = `${baseName}.${fileExtension}`;
 
-    //         const newMidpoint = getMidpoint(e.touches);
-    //         panX = pinchStartPan.x + (newMidpoint.x - pinchStartMidpoint.x);
-    //         panY = pinchStartPan.y + (newMidpoint.y - pinchStartMidpoint.y);
+                if (currentRotation === 0 && (!targetFormat || targetFormat === entry.type)) {
+                    // No rotation and no format change needed, or target is same as original
+                    try {
+                        outputBlob = dataURLtoBlob(entry.base64Data);
+                        // outputFileName remains entry.name (already set)
+                    } catch (e) {
+                        reject(new Error('Failed to convert dataURL to blob for original image.'));
+                        return;
+                    }
+                } else {
+                    // Rotation or format conversion is needed
+                    let w = img.width;
+                    let h = img.height;
 
-    //         modalImage.style.transform = `translate(${panX}px, ${panY}px) scale(${currentScale})`;
+                    if (currentRotation === 90 || currentRotation === 270) {
+                        canvas.width = h;
+                        canvas.height = w;
+                    } else {
+                        canvas.width = w;
+                        canvas.height = h;
+                    }
 
-    //         if (currentScale > 1.01) {
-    //             modalImage.classList.add('is-zoomed');
-    //         } else {
-    //             modalImage.classList.remove('is-zoomed');
-    //             panX = 0;
-    //             panY = 0;
-    //             modalImage.style.transform = `scale(${currentScale})`;
-    //         }
-    //     }
-    // }, { passive: false });
+                    ctx.translate(canvas.width / 2, canvas.height / 2);
+                    ctx.rotate(currentRotation * Math.PI / 180);
+                    ctx.drawImage(img, -w / 2, -h / 2);
 
-    // modalImage.addEventListener('touchend', function(e) {
-    //     if (e.touches.length < 2) {
-    //         isPinching = false;
-    //     }
-    // }); // REMOVE THIS BLOCK END
+                    try {
+                        outputBlob = await new Promise(res => canvas.toBlob(res, finalMimeType, 0.92)); // 0.92 quality for jpeg/webp
+                        if (!outputBlob) {
+                             // Fallback if toBlob fails for some reason, or unsupported type
+                            console.warn(`canvas.toBlob failed for type ${finalMimeType}, falling back to PNG`);
+                            finalMimeType = 'image/png';
+                            outputFileName = `${baseName}.png`;
+                            outputBlob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+                        }
+                    } catch (e) {
+                        reject(new Error(`Failed to convert canvas to blob (type: ${finalMimeType}).`));
+                        return;
+                    }
+                }
+                
+                if (!outputBlob) {
+                    reject(new Error('Image processing failed to produce a blob.'));
+                    return;
+                }
+
+                resolve({ blob: outputBlob, fileName: outputFileName });
+            };
+            img.onerror = () => {
+                reject(new Error('Failed to load image for processing.'));
+            };
+            img.src = entry.base64Data;
+        });
+    }
+    // --- Image Processing for Download --- End
 
     // Helper function to convert data URL to Blob (Moved to a higher scope)
     function dataURLtoBlob(dataurl) {
@@ -5367,6 +5624,11 @@
                 customConfirmModal.currentCancelHandler();
                 customConfirmModal.currentCancelHandler = null; // Clear handler after use
             }
+            // Handle Escape for Custom Choice Modal (New)
+            if (customChoiceModal && customChoiceModal.classList.contains('show') && typeof customChoiceModal.currentCancelHandler === 'function') {
+                customChoiceModal.currentCancelHandler();
+                customChoiceModal.currentCancelHandler = null; // Clear handler after use
+            }
         }
     });
 
@@ -5392,6 +5654,70 @@
             }
         }, 50); // Delay check by 50ms
     });
+
+    // --- Custom Choice Modal Function (New) --- Start
+    function showCustomChoiceModal(title, message, choices) {
+        return new Promise((resolve) => {
+            customChoiceTitle.textContent = title;
+            customChoiceMessage.textContent = message;
+            customChoiceActions.innerHTML = ''; // Clear previous buttons
+
+            choices.forEach(choice => {
+                const button = document.createElement('button');
+                button.textContent = choice.text;
+                button.dataset.value = choice.value;
+                // Apply styles similar to .custom-modal-actions button
+                button.style.background = 'rgba(66, 66, 66, 0.7)';
+                button.style.color = '#e0e0e0';
+                button.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+                button.style.borderRadius = '6px';
+                button.style.padding = '10px 20px';
+                button.style.cursor = 'pointer';
+                button.style.transition = 'all 0.2s ease';
+                button.style.fontSize = '14px';
+                button.style.fontWeight = '500';
+                button.style.minWidth = '90px';
+                button.style.margin = '5px'; // For wrapping
+
+                if (choice.type === 'primary') {
+                    button.style.background = 'rgba(76, 175, 80, 0.7)';
+                    button.style.borderColor = 'rgba(76, 175, 80, 0.5)';
+                }
+                
+                // Hover effects
+                const originalBg = button.style.background;
+                const originalBorder = button.style.border;
+                button.onmouseover = () => {
+                    button.style.background = choice.type === 'primary' ? 'rgba(76, 175, 80, 0.9)' : 'rgba(80, 80, 80, 0.8)';
+                    button.style.borderColor = choice.type === 'primary' ? 'rgba(76, 175, 80, 0.7)' : 'rgba(255, 255, 255, 0.2)';
+                    button.style.transform = 'translateY(-1px)';
+                };
+                button.onmouseout = () => {
+                    button.style.background = originalBg;
+                    button.style.borderColor = originalBorder;
+                    button.style.transform = 'none';
+                };
+
+                button.onclick = () => {
+                    cleanupAndResolve(choice.value);
+                };
+                customChoiceActions.appendChild(button);
+            });
+
+            customChoiceModal.classList.add('show');
+
+            const cleanupAndResolve = (value) => {
+                customChoiceModal.classList.remove('show');
+                resolve(value);
+            };
+
+            customChoiceModal.currentCancelHandler = () => {
+                const cancelChoice = choices.find(c => c.value === 'cancel');
+                cleanupAndResolve(cancelChoice ? cancelChoice.value : null);
+            };
+        });
+    }
+    // --- Custom Choice Modal Function (New) --- End
 
     </script>
 </body>
