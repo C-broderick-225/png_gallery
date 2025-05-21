@@ -1131,9 +1131,22 @@
         </div>
 
         <div class="save-actions">
+            <div class="form-group output-format-group">
+                <label for="outputFormatSelect">Output Format:</label>
+                <select id="outputFormatSelect">
+                    <option value="png" selected>PNG</option>
+                    <option value="webp">WebP</option>
+                </select>
+            </div>
             <button id="saveFileBtn" class="success-btn" disabled><i class="fas fa-save"></i>Save PNG</button>
             <button id="addToGalleryBtn" class="secondary-btn" disabled><i class="fas fa-plus"></i>Add to Gallery</button>
             <button id="saveAndAddBtn" class="success-btn" disabled><i class="fas fa-save"></i>Save & Add</button>
+            
+            <div class="image-tag-section" id="imageTagSection">
+                <label for="generatedImgTagTextarea">Generated Image Tag:</label>
+                <textarea id="generatedImgTagTextarea" readonly rows="3"></textarea>
+                <button id="copyImgTagBtn" class="secondary-btn"><i class="fas fa-copy"></i> Copy Tag</button>
+            </div>
         </div>
     </div>
     
@@ -1142,11 +1155,13 @@
     </footer>
     
     <!-- Include PNG metadata module -->
+    <script src="js/lib/jszip/jszip.min.js"></script>
+    <script type="module" src="js/lib/jsquash_webp/index.js"></script>
     <script src="png-metadata.js"></script>
     
     <script>
     // Wrap script in IIFE
-    (function() {
+    (async function() { // Changed to async function to allow await for @jsquash/webp
         'use strict';
 
         // --- Constants ---
@@ -1160,6 +1175,33 @@
         let currentFile = null;
         let currentFileHandle = null;
         let hasFileSystemAccess = false;
+        
+        // --- jSquash WebP ---
+        // The library is loaded via the script tag, assuming it makes `encode` and `decode` available globally or as module exports
+        // For example, if it's a module and exports functions:
+        let webpEncode, webpDecode;
+        try {
+            const webpModule = await import('./js/lib/jsquash_webp/index.js');
+            webpEncode = webpModule.encode;
+            webpDecode = webpModule.decode;
+            if (typeof webpEncode !== 'function' || typeof webpDecode !== 'function') {
+                console.warn('@jsquash/webp module loaded, but encode/decode functions not found directly. Check library exports.');
+                // Attempt to access via default if that's the structure
+                if (webpModule.default && typeof webpModule.default.encode === 'function') {
+                    webpEncode = webpModule.default.encode;
+                    webpDecode = webpModule.default.decode;
+                }
+            }
+             if (typeof webpEncode === 'function') {
+                console.log('@jsquash/webp encoder loaded successfully.');
+            } else {
+                console.error('@jsquash/webp encoder could not be loaded.');
+            }
+        } catch (e) {
+            console.error('Failed to load @jsquash/webp:', e);
+            showStatus('WebP library failed to load. WebP functionality will be disabled.', 'error');
+        }
+
 
         // --- DOM Elements ---
         const fileInput = document.getElementById('fileInput');
@@ -1174,10 +1216,22 @@
         const urlModal = document.getElementById('urlModal');
         const urlInput = document.getElementById('urlInput');
         const toastContainer = document.getElementById('toastContainer');
+        const outputFormatSelect = document.getElementById('outputFormatSelect');
+        const imageTagSection = document.getElementById('imageTagSection'); // New
+        const generatedImgTagTextarea = document.getElementById('generatedImgTagTextarea'); // New
+        const copyImgTagBtn = document.getElementById('copyImgTagBtn'); // New
+
 
         // --- Initialization ---
         hasFileSystemAccess = checkFileSystemAccessSupport();
         updateButtonTextAndState(); // Initial state
+
+        // --- Event Listeners ---
+        outputFormatSelect.addEventListener('change', () => {
+            updateButtonTextAndState();
+            imageTagSection.style.display = 'none'; // Hide tag section on format change
+        }); 
+
 
         // --- Functions ---
 
@@ -1214,7 +1268,13 @@
         }
 
         function updateButtonTextAndState() {
-            saveFileBtn.textContent = hasFileSystemAccess ? 'Save PNG' : 'Save';
+            const selectedFormat = outputFormatSelect.value.toUpperCase(); // Used for "Add to Gallery" part of combined button
+            const zipActionText = `Package & Download Zip`; // Zip download doesn't use FileSystemAccess directly for the zip itself
+            saveFileBtn.innerHTML = `<i class="fas fa-archive"></i>${zipActionText}`; 
+            
+            const saveAndAddActionText = `Package, Download Zip & Add ${selectedFormat}`;
+            saveAndAddBtn.innerHTML = `<i class="fas fa-archive"></i>${saveAndAddActionText}`;
+
             const fileLoaded = !!currentFile;
             saveFileBtn.disabled = !fileLoaded;
             addToGalleryBtn.disabled = !fileLoaded;
@@ -1345,127 +1405,167 @@
             }
             
             const button = event.target;
-            const originalButtonText = button.textContent; // Store original text
-            let newFile; // Declare newFile here
+            const originalButtonText = button.innerHTML; // Store original HTML content
+            const selectedFormat = outputFormatSelect.value; // png or webp
+            let imageFileBlob; 
+            let imageFileName; // This will be the name of the image file (e.g., myimage.png)
+            let imageMimeType;
 
             try {
                 button.classList.add('loading');
-                // Use specific text based on action
-                button.textContent = andAdd ? 'Saving & Adding...' : 'Saving...';
-                showStatus('Saving metadata...', 'info');
+                const actionText = andAdd ? `Packaging & Adding ${selectedFormat.toUpperCase()}` : `Packaging ${selectedFormat.toUpperCase()}`;
+                button.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${actionText}...`;
+                showStatus(`Preparing ${selectedFormat.toUpperCase()} and HTML for Zip...`, 'info');
 
-                const metadata = collectMetadata();
+                const collectedMetadata = collectMetadata(); // Use this for both PNG metadata and HTML generation
+                
+                const originalBaseName = (currentFile.name || 'image').replace(/\.[^/.]+$/, '');
 
-                if (currentFile.type.includes('png')) {
-                    newFile = await pngMetadata.writeMetadata(currentFile, metadata);
-                } else {
-                    showStatus('Converting image to PNG format...', 'info');
-                    const convertedFile = await convertToPNG(currentFile);
-                    newFile = await pngMetadata.writeMetadata(convertedFile, metadata);
-                }
-
-                const newFileName = currentFile.name.replace(/\.[^/.]+$/, '') + '.png';
-
-                let savedSuccessfully = false;
-                if (hasFileSystemAccess) {
-                    try {
-                        savedSuccessfully = await trySaveWithoutDialog(newFile);
-                        if (!savedSuccessfully) {
-                            saveFileWithDialog(newFile, newFileName); // Fallback to download
-                            savedSuccessfully = true; // Treat download as success for message purposes
-                        }
-                    } catch (error) {
-                        saveFileWithDialog(newFile, newFileName); // Fallback to download on error
-                        savedSuccessfully = true;
+                if (selectedFormat === 'png') {
+                    if (currentFile.type.includes('png') && !currentFile.name.endsWith('.webp')) { // Check it's not a WebP misidentified
+                        imageFileBlob = await pngMetadata.writeMetadata(currentFile, collectedMetadata);
+                    } else {
+                        showStatus('Converting image to PNG format...', 'info');
+                        const convertedFile = await convertToFormat(currentFile, 'png');
+                        imageFileBlob = await pngMetadata.writeMetadata(convertedFile, collectedMetadata);
                     }
+                    imageFileName = originalBaseName + '.png';
+                    imageMimeType = 'image/png';
+                    showStatus('✅ PNG created with metadata.', 'success', 1500); // Shorter duration for intermediate step
+                } else if (selectedFormat === 'webp') {
+                    showStatus('Converting image to WebP format...', 'info');
+                    imageFileBlob = await convertToFormat(currentFile, 'webp');
+                    imageFileName = originalBaseName + '.webp';
+                    imageMimeType = 'image/webp';
+                    console.log("WebP selected. Collected metadata (not embedded in WebP):", collectedMetadata);
+                    showStatus('ℹ️ WebP conversion complete. Metadata not embedded in WebP.', 'info', 2500);
                 } else {
-                    saveFileWithDialog(newFile, newFileName);
-                    savedSuccessfully = true;
+                    throw new Error('Unsupported format selected');
                 }
 
-                 // Update currentFile only if save/download was initiated
-                 if (savedSuccessfully) {
-                     currentFile = new File([newFile], newFileName, { type: 'image/png' });
-                     showStatus('✅ PNG file saved/downloaded!', 'success');
+                // Generate HTML content using the final imageFileName for the image src
+                const imgTagString = generateImgTag(imageFileName, collectedMetadata);
+                const htmlContentString = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>${(collectedMetadata.Title || imageFileName).replace(/"/g, '&quot;')}</title><style>body{margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background-color:#2d2d2d;color:#e0e0e0;font-family:sans-serif;}img{max-width:90%;max-height:90vh;object-fit:contain;box-shadow: 0 4px 15px rgba(0,0,0,0.2); border-radius: 8px;}</style></head><body>${imgTagString}</body></html>`;
 
-                      // Handle adding to gallery if requested
-                      if (andAdd) {
-                           // Show adding status before potentially long operation
-                           button.textContent = 'Adding...';
-                           showStatus('Adding to gallery...', 'info');
-                           await addToGalleryInternal(button); // Call internal add function
-                      }
-                 } else {
-                      showStatus('Save operation cancelled or failed.', 'warning');
+                // Create Zip
+                showStatus('Generating Zip archive...', 'info');
+                if (typeof JSZip === 'undefined') {
+                    showStatus('JSZip library not loaded. Cannot create zip file.', 'error');
+                    throw new Error('JSZip not loaded');
+                }
+                const zip = new JSZip();
+                zip.file(imageFileName, imageFileBlob); 
+                zip.file("index.html", htmlContentString); 
+                
+                const zipBlob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 9 } });
+                
+                const zipFileName = `${originalBaseName}_output.zip`; 
+                
+                saveFileWithDialog(zipBlob, zipFileName); // Always use dialog for zip download
+                
+                // Update currentFile to the processed image file (imageFileBlob), not the zip, 
+                // so "Add to Gallery" (especially via "Save & Add") uses the image.
+                currentFile = new File([imageFileBlob], imageFileName, { type: imageMimeType });
+                currentFileHandle = null; // Reset file handle as we are downloading a new zip.
+                
+                // Update preview
+                if (imageMimeType === 'image/webp' || imageMimeType === 'image/png') {
+                    const objectUrl = URL.createObjectURL(currentFile); 
+                    previewImage.src = objectUrl;
+                 }
+                showStatus(`✅ Zip file '${zipFileName}' prepared for download!`, 'success');
+
+                // Update the displayed HTML tag
+                generatedImgTagTextarea.value = imgTagString;
+                imageTagSection.style.display = 'flex';
+
+                if (andAdd) {
+                    button.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Adding to Gallery...`;
+                    showStatus('Adding image to gallery...', 'info');
+                    await addToGalleryInternal(button); 
+                }
+                 
+            } catch (error) {
+                showStatus(`Error processing file: ${error.message}`, 'error');
+                       imageTagSection.style.display = 'none'; // Hide if save failed
                  }
 
             } catch (error) {
                 showStatus(`Error saving file: ${error.message}`, 'error');
+                imageTagSection.style.display = 'none'; // Hide on error too
                 console.error(error);
             } finally {
-                 // Restore button state only if not currently adding
-                 if (!andAdd || !button.classList.contains('loading')) { // Check if still loading from addToGalleryInternal
+                 if (!andAdd || !button.classList.contains('loading')) { 
                      button.classList.remove('loading');
-                     button.textContent = originalButtonText; // Restore original text
+                     button.innerHTML = originalButtonText; 
                  }
             }
         }
         
         // Try to save the file without showing a dialog using File System Access API
-        async function trySaveWithoutDialog(blob) {
-            // Check if the File System Access API is available and we're not in a cross-origin iframe
+        async function trySaveWithoutDialog(blob, suggestedName) {
             if (!hasFileSystemAccess) {
-                console.log('File System Access API not available or disabled');
+                console.log('File System Access API not available or disabled, falling back to download.');
                 return false;
             }
             
             try {
-                let fileHandle;
+                let fileHandleToUse = currentFileHandle;
+                const selectedFormat = outputFormatSelect.value;
+                const fileExtension = `.${selectedFormat}`;
                 
-                // If we have a stored file handle, use it
-                if (currentFileHandle) {
-                    fileHandle = currentFileHandle;
-                    
-                    // Verify we have permission to write to this file
-                    const options = { mode: 'readwrite' };
-                    if (!(await verifyPermission(fileHandle, options))) {
-                        console.log('No permission to write to the file');
-                        return false;
-                    }
-                } else {
-                    // Otherwise, get a new file handle but with a picker dialog
-                    // This will show a dialog once, but subsequent saves won't
-                    const options = {
-                        suggestedName: currentFile.name,
+                // Determine if we need a new handle (e.g., format change or no handle)
+                if (!fileHandleToUse || !currentFile.name.endsWith(fileExtension)) {
+                    const pickerOpts = {
+                        suggestedName: suggestedName,
                         types: [{
-                            description: 'PNG Files',
-                            accept: {'image/png': ['.png']}
+                            description: `${selectedFormat.toUpperCase()} Files`,
+                            accept: { [`image/${selectedFormat}`]: [fileExtension] }
                         }]
                     };
-                    
-                    fileHandle = await window.showSaveFilePicker(options);
-                    // Store the file handle for future saves
-                    currentFileHandle = fileHandle;
+                    fileHandleToUse = await window.showSaveFilePicker(pickerOpts);
+                    currentFileHandle = fileHandleToUse; // Store the new handle
+                } else {
+                    // Verify permission for existing handle
+                    const options = { mode: 'readwrite' };
+                    if (!(await verifyPermission(fileHandleToUse, options))) {
+                        console.log('No permission to write to the existing file handle, attempting new picker.');
+                        // If permission denied, try to get a new handle via picker
+                        const pickerOpts = {
+                            suggestedName: suggestedName,
+                            types: [{
+                                description: `${selectedFormat.toUpperCase()} Files`,
+                                accept: { [`image/${selectedFormat}`]: [fileExtension] }
+                            }]
+                        };
+                        fileHandleToUse = await window.showSaveFilePicker(pickerOpts);
+                        currentFileHandle = fileHandleToUse; // Store the new handle
+                    }
                 }
                 
-                // Get a writable stream and write the blob data
-                const writable = await fileHandle.createWritable();
+                const writable = await fileHandleToUse.createWritable();
                 await writable.write(blob);
                 await writable.close();
                 
+                // Update currentFile.name if it was saved with a new name/extension via picker
+                if (fileHandleToUse.name !== currentFile.name) {
+                    currentFile = new File([blob], fileHandleToUse.name, { type: blob.type });
+                    // Update UI elements that show file name if any (not currently implemented)
+                }
+                updateButtonTextAndState(); // Reflect potential name change or format change
                 return true;
             } catch (error) {
                 console.error('Failed to save file without dialog:', error);
-                
-                // If we get a cross-origin error, disable File System Access API for future operations
                 if (error.name === 'SecurityError' || error.message?.includes('Cross origin')) {
                     hasFileSystemAccess = false;
-                    saveFileBtn.textContent = 'Save';
-                    showStatus('Using download method due to security restrictions', 'info');
+                    updateButtonTextAndState(); // Update button text to "Download"
+                    showStatus('Using download method due to security restrictions.', 'info');
+                } else if (error.name === 'AbortError') {
+                    showStatus('Save cancelled by user.', 'info');
+                } else {
+                    showStatus(`Error during save: ${error.message}`, 'error');
                 }
-                
-                // User may have cancelled the save dialog, or any other error
-                return false;
+                return false; // Fallback to dialog save will be triggered by caller
             }
         }
         
@@ -1705,6 +1805,33 @@
         // Add to gallery button click handler
         addToGalleryBtn.addEventListener('click', (event) => addToGalleryInternal(event.target)); // Pass button to internal function
         saveAndAddBtn.addEventListener('click', (event) => saveWithMetadata(event, true)); // Trigger save then add
+        
+        copyImgTagBtn.addEventListener('click', () => {
+            if (!generatedImgTagTextarea.value) {
+                showStatus('No image tag generated yet.', 'warning');
+                return;
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(generatedImgTagTextarea.value)
+                    .then(() => {
+                        showStatus('Image tag copied to clipboard!', 'success');
+                    })
+                    .catch(err => {
+                        showStatus('Failed to copy image tag.', 'error');
+                        console.error('Error copying to clipboard:', err);
+                    });
+            } else {
+                // Fallback for browsers that don't support navigator.clipboard
+                generatedImgTagTextarea.select();
+                try {
+                    document.execCommand('copy');
+                    showStatus('Image tag copied to clipboard! (fallback method)', 'success');
+                } catch (err) {
+                    showStatus('Failed to copy image tag. Clipboard API not available.', 'error');
+                    console.error('Error copying to clipboard (fallback):', err);
+                }
+            }
+        });
 
         viewGalleryBtn.addEventListener('click', () => {
             // Notify parent window to close the editor
@@ -1733,30 +1860,42 @@
 
             try {
                 // Ensure button has loading state if called directly
-                if (!button.classList.contains('loading')) {
+                    if (!button.classList.contains('loading')) { // Should already be loading if called after saveAndAdd
                     button.classList.add('loading');
-                    button.textContent = 'Adding...';
+                        button.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Adding...`;
                 }
                 showStatus('Preparing image for gallery...', 'info');
+                    
+                    const selectedFormat = outputFormatSelect.value;
 
-                // Check if it's already a PNG, if not, convert (should ideally happen on load/save)
-                if (!fileToAdd.type.includes('png')) {
-                    showStatus('Converting to PNG before adding...', 'info');
-                    const convertedFile = await convertToPNG(fileToAdd);
-                    // Apply metadata *again* to the newly converted PNG before adding
+                    // Ensure file is in the correct format with metadata before adding
+                    // This logic is a bit redundant with saveWithMetadata, but ensures consistency
+                    // if addToGallery is called independently or if saveWithMetadata had issues.
                     const metadata = collectMetadata();
-                    fileToAdd = await pngMetadata.writeMetadata(convertedFile, metadata);
-                    // Update currentFile if it was converted here
-                    currentFile = new File([fileToAdd], currentFile.name.replace(/\.[^/.]+$/, '') + '.png', { type: 'image/png' });
-                } else {
-                    // If it *is* PNG, ensure current metadata from form is applied
-                    const metadata = collectMetadata();
-                    fileToAdd = await pngMetadata.writeMetadata(fileToAdd, metadata);
-                    // Update currentFile with potentially changed metadata
-                    currentFile = new File([fileToAdd], currentFile.name, { type: 'image/png' });
+
+                    if (selectedFormat === 'png') {
+                        if (!fileToAdd.type.includes('png') || fileToAdd.name !== currentFile.name) { // Check if conversion or rename happened
+                             showStatus('Converting to PNG and applying metadata before adding...', 'info');
+                             const convertedFile = await convertToFormat(currentFile, 'png'); // Use original currentFile for conversion source
+                             fileToAdd = await pngMetadata.writeMetadata(convertedFile, metadata);
+                             currentFile = new File([fileToAdd], currentFile.name.replace(/\.[^/.]+$/, '.png'), { type: 'image/png'});
+                        } else if (fileToAdd.type.includes('png')) { // Already PNG, just ensure metadata is current
+                            fileToAdd = await pngMetadata.writeMetadata(fileToAdd, metadata);
+                            currentFile = new File([fileToAdd], currentFile.name, { type: 'image/png'});
+                        }
+                    } else if (selectedFormat === 'webp') {
+                        if (!fileToAdd.type.includes('webp') || fileToAdd.name !== currentFile.name) {
+                            showStatus('Converting to WebP before adding...', 'info');
+                            fileToAdd = await convertToFormat(currentFile, 'webp'); // Use original currentFile
+                            currentFile = new File([fileToAdd], currentFile.name.replace(/\.[^/.]+$/, '.webp'), { type: 'image/webp'});
+                            // Metadata for WebP is logged in convertToFormat, not embedded in this step
+                            console.log("WebP metadata for gallery add:", metadata);
+                        }
+                        // If already WebP and current, fileToAdd is fine. Metadata is not re-applied here for WebP.
                 }
 
-                const savedFileName = currentFile.name || 'edited_image.png';
+
+                    const savedFileName = currentFile.name || `edited_image.${selectedFormat}`;
                 const base64Data = await blobToBase64(fileToAdd);
 
                 // --- Check localStorage and add ---
@@ -1825,9 +1964,11 @@
                 button.classList.remove('loading');
                 // Determine correct original text (might depend on which button was clicked)
                 if (button.id.includes('saveAndAdd')) {
-                    button.textContent = hasFileSystemAccess ? 'Save & Add' : 'Save & Add';
+                    const formatText = outputFormatSelect.value.toUpperCase();
+                    const actionText = hasFileSystemAccess ? `Save & Add ${formatText}` : `Download ${formatText} & Add`;
+                    button.innerHTML = `<i class="fas fa-save"></i>${actionText}`;
                 } else {
-                    button.textContent = 'Add to Gallery';
+                    button.innerHTML = `<i class="fas fa-plus"></i>Add to Gallery`;
                 }
             }
         }
@@ -1845,55 +1986,85 @@
         // Save file button click handler
         saveFileBtn.addEventListener('click', (event) => saveWithMetadata(event, false)); // Pass false for andAdd
 
-        // Function to convert image to PNG format
-        async function convertToPNG(file) {
+        // Function to convert image to PNG or WebP format
+        async function convertToFormat(file, format = 'png') { // Default to PNG
             return new Promise((resolve, reject) => {
-                // Create a FileReader to read the image file
                 const reader = new FileReader();
                 reader.onload = (e) => {
-                    // Create an image element
                     const img = new Image();
-                    img.onload = () => {
-                        // Create a canvas element
+                    img.onload = async () => {
                         const canvas = document.createElement('canvas');
                         canvas.width = img.width;
                         canvas.height = img.height;
-                        
-                        // Draw the image on the canvas
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0);
-                        
-                        // Convert canvas to blob
-                        canvas.toBlob((blob) => {
-                            if (blob) {
-                                // Create a new File object with the PNG blob
-                                const pngFile = new File([blob], file.name.replace(/\.[^/.]+$/, '') + '.png', {
-                                    type: 'image/png'
-                                });
-                                resolve(pngFile);
-                            } else {
-                                reject(new Error('Failed to convert image to PNG'));
+
+                        if (format === 'webp' && webpEncode) {
+                            try {
+                                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                                const webpBuffer = await webpEncode(imageData);
+                                const webpFile = new File([webpBuffer], file.name.replace(/\.[^/.]+$/, '') + '.webp', { type: 'image/webp' });
+                                resolve(webpFile);
+                            } catch (error) {
+                                console.error('WebP encoding failed:', error);
+                                reject(new Error(`Failed to convert to WebP: ${error.message}`));
                             }
-                        }, 'image/png');
+                        } else if (format === 'png') {
+                            canvas.toBlob((blob) => {
+                                if (blob) {
+                                    const pngFile = new File([blob], file.name.replace(/\.[^/.]+$/, '') + '.png', { type: 'image/png' });
+                                    resolve(pngFile);
+                                } else {
+                                    reject(new Error('Failed to convert image to PNG blob'));
+                                }
+                            }, 'image/png');
+                        } else {
+                             reject(new Error(`Unsupported format: ${format} or WebP encoder not loaded.`));
+                        }
                     };
-                    
-                    img.onerror = () => {
-                        reject(new Error('Failed to load image'));
-                    };
-                    
-                    // Load the image from the FileReader result
+                    img.onerror = () => reject(new Error('Failed to load image for conversion'));
                     img.src = e.target.result;
                 };
-                
-                reader.onerror = () => {
-                    reject(new Error('Failed to read file'));
-                };
-                
-                // Read the file as Data URL
+                reader.onerror = () => reject(new Error('Failed to read file for conversion'));
                 reader.readAsDataURL(file);
             });
         }
 
+        // Function to generate an HTML <img> tag with appropriate alt text
+        function generateImgTag(filename, metadata) {
+            let altText = "Image"; // Default alt text
+            if (metadata && metadata.Title && metadata.Title.trim() !== "") {
+                altText = metadata.Title.trim();
+            } else if (metadata && metadata.Description && metadata.Description.trim() !== "") {
+                altText = metadata.Description.trim();
+            }
+            // Escape double quotes in altText and filename to prevent HTML injection
+            const safeFilename = filename.replace(/"/g, '&quot;');
+            const safeAltText = altText.replace(/"/g, '&quot;');
+            
+            return `<img src="${safeFilename}" alt="${safeAltText}">`;
+        }
+
+        /*
+        // Example Usage (for testing):
+        const exampleMeta = { "Title": "Sunset Over Mountains", "Description": "A beautiful sunset scene." };
+        const exampleFilename = "sunset.webp";
+        const imgTag = generateImgTag(exampleFilename, exampleMeta);
+        console.log(imgTag); // Expected: <img src="sunset.webp" alt="Sunset Over Mountains">
+
+        const exampleMetaNoTitle = { "Description": "Just a cool pic." };
+        const imgTagNoTitle = generateImgTag("cool_pic.png", exampleMetaNoTitle);
+        console.log(imgTagNoTitle); // Expected: <img src="cool_pic.png" alt="Just a cool pic.">
+
+        const exampleMetaNoData = {};
+        const imgTagNoData = generateImgTag("generic.jpg", exampleMetaNoData);
+        console.log(imgTagNoData); // Expected: <img src="generic.jpg" alt="Image">
+        
+        const exampleMetaEmptyTitle = { "Title": "   ", "Description": "Description only if title is empty string." };
+        const imgTagEmptyTitle = generateImgTag("empty_title.png", exampleMetaEmptyTitle);
+        console.log(imgTagEmptyTitle); // Expected: <img src="empty_title.png" alt="Description only if title is empty string.">
+        */
+        
         // --- Initial Message to Parent ---
         // Let the parent know the editor is ready
         if (window.parent !== window) {
