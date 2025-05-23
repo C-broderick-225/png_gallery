@@ -2154,6 +2154,8 @@
     let db = null;
     let currentImageIndex = -1;
     let imageEntries = []; // This array will be reordered by drag/drop
+    let jsquash_webp_encode_default; // To store the encode function
+    let webpEncoderLoaded = false;
     let selectedIndices = []; // Added for multi-select
     let selectedFilterTags = new Set(); // Added for tag filtering
     let loadingToastId = null; // Added to track the loading status toast
@@ -2338,6 +2340,13 @@
     async function initGallery() {
         try {
             await openDB();
+            try {
+                await ensureWebpEncoderLoaded();
+                showStatus('WebP encoder initialized.', 'info');
+            } catch (error) {
+                console.error('WebP encoder initialization failed:', error);
+                showStatus('WebP encoder failed to load. WebP downloads may not work.', 'error');
+            }
              // --- Initialize Bulk Tag Elements Here after DOM is ready --- Start
             bulkTagModal = document.getElementById('bulkTagModal');
             bulkTagInput = document.getElementById('bulkTagInput');
@@ -4246,10 +4255,28 @@
             return; // Exit function after single download
         }
 
+        // Prompt for download format for batch download
+        const formatChoices = [
+            { text: 'PNG (with tags)', value: 'png', type: 'primary' },
+            { text: 'WebP', value: 'webp' },
+            { text: 'Original', value: 'original' },
+            { text: 'Cancel', value: 'cancel' }
+        ];
+        const chosenFormat = await showCustomChoiceModal(
+            'Batch Download Options',
+            'Choose format for all selected images in the ZIP:',
+            formatChoices
+        );
+
+        if (chosenFormat === 'cancel' || !chosenFormat) {
+            showStatus('Batch download cancelled.', 'info');
+            return; // Exit if user cancels
+        }
+
         // Proceed with zipping for multiple files
         const indicesToDownload = [...selectedIndices]; // Copy selected indices
         const total = indicesToDownload.length;
-        const toastId = showStatus(`Preparing to download ${total} image(s) as a ZIP...`, 'info', { persistent: true, showSpinner: true });
+        const toastId = showStatus(`Preparing to download ${total} image(s) as ${chosenFormat.toUpperCase()}...`, 'info', { persistent: true, showSpinner: true });
 
         if (typeof JSZip === 'undefined') {
             showStatus('JSZip library not loaded. Cannot create ZIP file.', 'error', { id: toastId, persistent: false, showSpinner: false });
@@ -4261,48 +4288,57 @@
         let filesAdded = 0;
         let currentFileNum = 0; // To update toast
 
-        // Helper function to convert data URL to Blob is already in global scope
-
-        // Process each selected file for zipping
-        for (const index of indicesToDownload) { // Changed to for...of for async/await
+        for (const index of indicesToDownload) {
             currentFileNum++;
             const entry = imageEntries[index];
-            
-            showStatus(`Processing file ${currentFileNum}/${total} for ZIP: ${entry.name}`, 'info', { id: toastId, persistent: true, showSpinner: true });
 
             if (!entry || !entry.base64Data || !entry.name) {
                 console.error(`Skipping download for index ${index}: Missing data.`);
-                showStatus(`Skipping one image: Missing data. (${currentFileNum}/${total})`, 'error'); // Update toast for skip
-                continue; // Skip this one
+                showStatus(`Skipping one image: Missing data. (${currentFileNum}/${total})`, 'error', { id: toastId });
+                continue; 
             }
+
+            showStatus(`Processing ${entry.name} (${currentFileNum}/${total}) for ZIP as ${chosenFormat.toUpperCase()}...`, 'info', { id: toastId, persistent: true, showSpinner: true });
+
+            let blobForZip;
+            let fileNameForZip;
 
             try {
-                let metadataToWrite = {};
-                if (entry.tags && Array.isArray(entry.tags) && entry.tags.length > 0) {
-                    metadataToWrite.Keywords = entry.tags.join(',');
+                if (chosenFormat === 'png') {
+                    const { blob: pngProcessedBlob, fileName: pngFileName } = await getProcessedImageBlob(entry, 'image/png');
+                    let metadataToWrite = {};
+                    if (entry.tags && Array.isArray(entry.tags) && entry.tags.length > 0) {
+                        metadataToWrite.Keywords = entry.tags.join(',');
+                    }
+                    // Add other metadata from entry if desired for PNGs (e.g., title, author)
+                    if (entry.title) metadataToWrite.Title = entry.title;
+                    if (entry.author) metadataToWrite.Author = entry.author;
+                    // ... add others as needed
+                    blobForZip = await pngMetadata.writeMetadata(pngProcessedBlob, metadataToWrite);
+                    fileNameForZip = pngFileName; 
+                } else if (chosenFormat === 'webp') {
+                    const { blob: webpProcessedBlob, fileName: webpFileName } = await getProcessedImageBlob(entry, 'image/webp');
+                    blobForZip = webpProcessedBlob;
+                    fileNameForZip = webpFileName;
+                } else { // 'original'
+                    const { blob: originalProcessedBlob, fileName: originalFileName } = await getProcessedImageBlob(entry, entry.type);
+                    blobForZip = originalProcessedBlob;
+                    fileNameForZip = originalFileName;
                 }
 
-                const originalBlob = dataURLtoBlob(entry.base64Data);
-                let blobForProcessing = originalBlob;
-                let pngFileName = entry.name.replace(/\.[^/.]+$/, '') + '.png';
-
-                if (entry.type !== 'image/png') {
-                    console.log(`Converting ${entry.name} to PNG for ZIP...`);
-                    // convertToPNG expects a File, so create one from the blob
-                    const originalFile = new File([originalBlob], entry.name, { type: entry.type });
-                    blobForProcessing = await convertToPNG(originalFile); // This returns a Blob (File is a Blob)
+                if (blobForZip) {
+                    zip.file(fileNameForZip, blobForZip);
+                    filesAdded++;
+                } else {
+                    console.warn(`Could not process ${entry.name} for ZIP, skipping.`);
+                    showStatus(`Skipped ${entry.name}: processing failed. (${currentFileNum}/${total})`, 'error', { id: toastId });
                 }
-
-                console.log(`Writing metadata for ${pngFileName} for ZIP...`, metadataToWrite);
-                const finalBlobWithMetadata = await pngMetadata.writeMetadata(blobForProcessing, metadataToWrite);
-
-                zip.file(pngFileName, finalBlobWithMetadata);
-                filesAdded++;
             } catch (error) {
                 console.error(`Error processing image ${entry.name} for zipping:`, error);
-                showStatus(`Error processing ${entry.name} for ZIP: ${error.message}`, 'error');
+                showStatus(`Error with ${entry.name}: ${error.message}. (${currentFileNum}/${total})`, 'error', { id: toastId });
             }
         }
+
         /* // Old forEach loop, replaced by for...of for async/await
         indicesToDownload.forEach((index, i) => {
             const entry = imageEntries[index];
@@ -5297,6 +5333,7 @@
 
         const choices = [
             { text: 'PNG', value: 'png', type: 'primary' }, // 'primary' for distinct styling
+            { text: 'WebP', value: 'webp' }, // Added WebP
             { text: 'Original', value: 'original' },
             { text: 'Cancel', value: 'cancel' } // Standard cancel value
         ];
@@ -5455,7 +5492,20 @@
 
     // --- Image Processing for Download --- Start
     async function getProcessedImageBlob(entry, targetFormat = null) {
-        return new Promise((resolve, reject) => {
+        return new Promise(async (resolve, reject) => { // Make the outer promise async
+            if (targetFormat === 'image/webp') {
+                try {
+                    await ensureWebpEncoderLoaded(); // ensureWebpEncoderLoaded should be available
+                    if (typeof jsquash_webp_encode_default !== 'function') {
+                        throw new Error('WebP encoder function not available.');
+                    }
+                } catch (error) {
+                    console.error('WebP encoder not loaded:', error);
+                    reject(new Error('WebP encoder is not available. Cannot encode to WebP.'));
+                    return;
+                }
+            }
+
             const img = new Image();
             img.onload = async () => {
                 let canvas = document.createElement('canvas');
@@ -5463,48 +5513,50 @@
                 let outputBlob;
                 let outputFileName = entry.name;
                 const currentRotation = entry.rotationAngle || 0;
-
-                // Determine final format and extension
-                let finalMimeType = targetFormat || entry.type;
-                if (currentRotation !== 0 && finalMimeType !== 'image/png') {
-                    // If rotated, and target isn't already PNG, default to PNG to preserve quality
-                    // unless a specific targetFormat (like 'image/jpeg') was explicitly requested for the rotated image.
-                    if (!targetFormat) finalMimeType = 'image/png';
-                }
-                const fileExtension = finalMimeType.split('/')[1] || 'png';
                 const baseName = entry.name.substring(0, entry.name.lastIndexOf('.') > -1 ? entry.name.lastIndexOf('.') : entry.name.length);
-                outputFileName = `${baseName}.${fileExtension}`;
 
-                if (currentRotation === 0 && (!targetFormat || targetFormat === entry.type)) {
-                    // No rotation and no format change needed, or target is same as original
+                // Set canvas dimensions based on rotation
+                if (currentRotation === 90 || currentRotation === 270) {
+                    canvas.width = img.height;
+                    canvas.height = img.width;
+                } else {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                }
+
+                // Apply rotation and draw image to canvas
+                ctx.translate(canvas.width / 2, canvas.height / 2);
+                if (currentRotation !== 0) {
+                    ctx.rotate(currentRotation * Math.PI / 180);
+                }
+                ctx.drawImage(img, -img.width / 2, -img.height / 2); // Draw centered before rotation, then rotate context
+
+                if (targetFormat === 'image/webp') {
                     try {
-                        outputBlob = dataURLtoBlob(entry.base64Data);
-                        // outputFileName remains entry.name (already set)
-                    } catch (e) {
-                        reject(new Error('Failed to convert dataURL to blob for original image.'));
+                        if (typeof jsquash_webp_encode_default !== 'function') {
+                            throw new Error('WebP encoder function not available for actual encoding.');
+                        }
+                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                        const webpOptions = { quality: 75 }; 
+                        
+                        console.log('Encoding to WebP with options:', webpOptions);
+                        const webpArrayBuffer = await jsquash_webp_encode_default(imageData, webpOptions);
+                        outputBlob = new Blob([webpArrayBuffer], { type: 'image/webp' });
+                        outputFileName = `${baseName}.webp`;
+                        console.log('WebP encoding successful.');
+                    } catch (encodeError) {
+                        console.error('WebP encoding failed:', encodeError);
+                        reject(new Error(`Failed to encode to WebP: ${encodeError.message}`));
                         return;
                     }
-                } else {
-                    // Rotation or format conversion is needed
-                    let w = img.width;
-                    let h = img.height;
-
-                    if (currentRotation === 90 || currentRotation === 270) {
-                        canvas.width = h;
-                        canvas.height = w;
-                    } else {
-                        canvas.width = w;
-                        canvas.height = h;
-                    }
-
-                    ctx.translate(canvas.width / 2, canvas.height / 2);
-                    ctx.rotate(currentRotation * Math.PI / 180);
-                    ctx.drawImage(img, -w / 2, -h / 2);
-
+                } else if (currentRotation !== 0 || (targetFormat && targetFormat !== entry.type)) {
+                    // Existing logic for rotation or format conversion using canvas.toBlob
+                    let finalMimeType = targetFormat || (currentRotation !== 0 ? 'image/png' : entry.type);
+                    const fileExtension = finalMimeType.split('/')[1] || 'png';
+                    outputFileName = `${baseName}.${fileExtension}`;
                     try {
-                        outputBlob = await new Promise(res => canvas.toBlob(res, finalMimeType, 0.92)); // 0.92 quality for jpeg/webp
+                        outputBlob = await new Promise(res => canvas.toBlob(res, finalMimeType, 0.92));
                         if (!outputBlob) {
-                             // Fallback if toBlob fails for some reason, or unsupported type
                             console.warn(`canvas.toBlob failed for type ${finalMimeType}, falling back to PNG`);
                             finalMimeType = 'image/png';
                             outputFileName = `${baseName}.png`;
@@ -5512,6 +5564,15 @@
                         }
                     } catch (e) {
                         reject(new Error(`Failed to convert canvas to blob (type: ${finalMimeType}).`));
+                        return;
+                    }
+                } else {
+                    // No rotation, no format change requested, use original blob
+                    try {
+                        outputBlob = dataURLtoBlob(entry.base64Data);
+                        outputFileName = entry.name; // Keep original name and extension
+                    } catch (e) {
+                        reject(new Error('Failed to convert dataURL to blob for original image.'));
                         return;
                     }
                 }
@@ -5718,6 +5779,38 @@
         });
     }
     // --- Custom Choice Modal Function (New) --- End
+
+    async function ensureWebpEncoderLoaded() {
+        if (webpEncoderLoaded && typeof jsquash_webp_encode_default === 'function') {
+            return true;
+        }
+        if (window.jsquash_webp_encode) { // If already loaded globally somehow
+                jsquash_webp_encode_default = window.jsquash_webp_encode;
+                webpEncoderLoaded = true;
+                return true;
+        }
+        return new Promise((resolve, reject) => {
+            console.log('Attempting to load Jsquash WebP encoder library...');
+            const script = document.createElement('script');
+            script.src = 'js/lib/jsquash_webp/index.js'; 
+            script.onload = () => {
+                if (window.jsquash_webp_encode) {
+                    jsquash_webp_encode_default = window.jsquash_webp_encode;
+                    webpEncoderLoaded = true;
+                    console.log('Jsquash WebP encoder loaded successfully.');
+                    resolve(true);
+                } else {
+                    console.error('Jsquash WebP script loaded, but window.jsquash_webp_encode is not defined.');
+                    reject(new Error('Jsquash WebP encoder failed to initialize properly.'));
+                }
+            };
+            script.onerror = (err) => {
+                console.error('Failed to load Jsquash WebP encoder script:', err);
+                reject(new Error('Failed to load Jsquash WebP encoder script.'));
+            };
+            document.head.appendChild(script);
+        });
+    }
 
     </script>
 </body>
